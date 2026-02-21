@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Index/Document icon -->
+  <defs>
+    <style>
+      .doc-fill { fill: #0078d4; }
+      .doc-stroke { stroke: #0078d4; stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+  
+  <!-- Document body -->
+  <rect x="6" y="3" width="16" height="22" rx="1" class="doc-stroke"/>
+  
+  <!-- Text lines on document -->
+  <line x1="9" y1="10" x2="19" y2="10" class="doc-stroke"/>
+  <line x1="9" y1="15" x2="19" y2="15" class="doc-stroke"/>
+  <line x1="9" y1="20" x2="15" y2="20" class="doc-stroke"/>
+  
+  <!-- Index marker/bookmark flag on side -->
+  <path d="M 20 8 L 26 4 L 26 12 Z" class="doc-fill"/>
+</svg>

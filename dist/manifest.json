@@ -1,0 +1,181 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/teams/vDevPreview/MicrosoftTeams.schema.json",
+    "manifestVersion": "devPreview",
+    "version": "1.0.0",
+    "id": "ff33d334-818a-4a94-92f1-b34de8a0b7dc",
+    "localizationInfo": {
+        "defaultLanguageTag": "en-us",
+        "additionalLanguages": []
+    },
+    "developer": {
+        "name": "Contoso",
+        "websiteUrl": "https://www.contoso.com",
+        "privacyUrl": "https://www.contoso.com/privacy",
+        "termsOfUseUrl": "https://www.contoso.com/servicesagreement"
+    },
+    "name": {
+        "short": "NameIndexer",
+        "full": "Armenian Name Indexer for Word"
+    },
+    "description": {
+        "short": "Automatically index Armenian names in your Word document.",
+        "full": "This add-in automatically identifies and indexes Armenian names in your Word document with customizable exceptions, patterns, and suffix normalization."
+    },
+    "icons": {
+        "outline": "assets/outline.png",
+        "color": "assets/color.png"
+    },
+    "accentColor": "#230201",
+    "validDomains": [
+        "contoso.com"
+    ],
+    "authorization": {
+        "permissions": {
+            "resourceSpecific": [
+                {
+                    "name": "Document.ReadWrite.User",
+                    "type": "Delegated"
+                }
+            ]
+        }
+    },
+    "extensions": [
+        {
+            "requirements": {
+                "capabilities": [
+                    {
+                        "name": "AddinCommands",
+                        "minVersion": "1.1"
+                    }
+                ],
+                "scopes": [
+                    "document"
+                ]
+            },
+            "runtimes": [
+                {
+                    "requirements": {
+                        "capabilities": [
+                            {
+                                "name": "AddinCommands",
+                                "minVersion": "1.1"
+                            }
+                        ]
+                    },
+                    "id": "TaskPaneRuntime",
+                    "type": "general",
+                    "code": {
+                        "page": "https://www.contoso.com/taskpane.html"
+                    },
+                    "lifetime": "short",
+                    "actions": [
+                        {
+                            "id": "TaskPaneRuntimeShow",
+                            "type": "openPage",
+                            "pinnable": false,
+                            "view": "dashboard"
+                        }
+                    ]
+                },
+                {
+                    "id": "CommandsRuntime",
+                    "type": "general",
+                    "code": {
+                        "page": "https://www.contoso.com/commands.html",
+                        "script": "https://www.contoso.com/commands.js"
+                    },
+                    "lifetime": "short",
+                    "actions": [
+                        {
+                            "id": "action",
+                            "type": "executeFunction",
+                            "displayName": "action"
+                        }
+                    ]
+                }
+            ],
+            "ribbons": [
+                {
+                    "contexts": [
+                        "default"
+                    ],
+                    "tabs": [
+                        {
+                            "builtInTabId": "TabHome",
+                            "groups": [
+                                {
+                                    "id": "msgReadGroup",
+                                    "label": "Armenian Indexer",
+                                    "icons": [
+                                        {
+                                            "size": 16,
+                                            "url": "https://www.contoso.com/assets/icon-16.png"
+                                        },
+                                        {
+                                            "size": 32,
+                                            "url": "https://www.contoso.com/assets/icon-32.png"
+                                        },
+                                        {
+                                            "size": 80,
+                                            "url": "https://www.contoso.com/assets/icon-80.png"
+                                        }
+                                    ],
+                                    "controls": [
+                                        {
+                                            "id": "msgReadOpenPaneButton",
+                                            "type": "button",
+                                            "label": "Settings",
+                                            "icons": [
+                                                {
+                                                    "size": 16,
+                                                    "url": "https://www.contoso.com/assets/icon-16.png"
+                                                },
+                                                {
+                                                    "size": 32,
+                                                    "url": "https://www.contoso.com/assets/icon-32.png"
+                                                },
+                                                {
+                                                    "size": 80,
+                                                    "url": "https://www.contoso.com/assets/icon-80.png"
+                                                }
+                                            ],
+                                            "supertip": {
+                                                "title": "Armenian Indexer Settings",
+                                                "description": "Opens the task pane to configure indexing settings and run operations."
+                                            },
+                                            "actionId": "TaskPaneRuntimeShow"
+                                        },
+                                        {
+                                            "id": "ActionButton",
+                                            "type": "button",
+                                            "label": "Index Names",
+                                            "icons": [
+                                                {
+                                                    "size": 16,
+                                                    "url": "https://www.contoso.com/assets/icon-16.png"
+                                                },
+                                                {
+                                                    "size": 32,
+                                                    "url": "https://www.contoso.com/assets/icon-32.png"
+                                                },
+                                                {
+                                                    "size": 80,
+                                                    "url": "https://www.contoso.com/assets/icon-80.png"
+                                                }
+                                            ],
+                                            "supertip": {
+                                                "title": "Index Armenian Names",
+                                                "description": "Automatically index all Armenian names in the document using saved settings."
+                                            },
+                                            "actionId": "action"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

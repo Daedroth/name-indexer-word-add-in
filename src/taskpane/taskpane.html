@@ -1,0 +1,127 @@
+<!-- Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License. -->
+<!-- This file shows how to design a first-run page that provides a welcome screen to the user about the features of the add-in. -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Armenian Name Indexer</title>
+
+    <!-- Office JavaScript API -->
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+
+    <!-- Template styles -->
+    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body>
+    <header class="header">
+        <h1 class="title">Armenian Name Indexer</h1>
+    </header>
+    
+    <section id="sideload-msg" class="container">
+        <h2>Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
+    </section>
+    
+    <main id="app-body" class="container" style="display: none;">
+        
+        <!-- Actions Section -->
+        <section class="section">
+            <button id="index-btn" class="action-button">
+                Index Names
+            </button>
+            <button id="clear-btn" class="action-button">
+                Clear All Entries
+            </button>
+        </section>
+
+            <!-- Progress Section -->
+            <section id="progress-section" class="section" style="display: none;">
+                <div class="progress-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <p id="status-text" class="status-text"></p>
+            </section>
+
+            <!-- Result Section -->
+            <section id="result-section" class="section" style="display: none;">
+                <div id="result-message" class="message"></div>
+            </section>
+
+        <!-- Settings Section -->
+        <section class="section">
+            <h2 class="section-title">Settings</h2>
+            
+            <!-- Exceptions -->
+            <div class="setting-group">
+                <label for="exceptions-textarea" class="setting-label">
+                    Exceptions (words to skip)
+                </label>
+                <p class="setting-hint">Enter comma or newline-separated words</p>
+                <textarea id="exceptions-textarea" rows="4" 
+                    placeholder="Երևան, Հայաստան, etc."></textarea>
+                <div class="file-upload-group">
+                    <button for="exceptions-file" class="file-button" onclick="document.getElementById('exceptions-file').click()">
+                        Upload File
+                    </button>
+                    <input type="file" id="exceptions-file" accept=".txt" style="display: none;" />
+                    <span id="file-name" class="file-name"></span>
+                </div>
+            </div>
+
+            <!-- Pattern -->
+            <div class="setting-group">
+                <label for="pattern-input" class="setting-label">
+                    Pattern (regex)
+                </label>
+                <p class="setting-hint">Regular expression for matching Armenian names</p>
+                <input type="text" id="pattern-input"
+                    placeholder="[\\u0531-\\u0556][\\u0561-\\u0586]+..." />
+            </div>
+
+            <!-- Suffixes -->
+            <div class="setting-group">
+                <label for="suffixes-textarea" class="setting-label">
+                    Suffixes to remove
+                </label>
+                <p class="setting-hint">Unicode-escaped suffixes (comma-separated)</p>
+                <textarea id="suffixes-textarea" rows="3"
+                    placeholder="\u056B\u0581, \u056B\u0576, \u0578\u057E, etc."></textarea>
+            </div>
+
+            <!-- Word Count -->
+            <div class="setting-group">
+                <label class="setting-label">
+                    Word count (min - max)
+                </label>
+                <p class="setting-hint">Number of capitalized words to match</p>
+                <div class="word-count-inputs">
+                    <input type="number" id="wordcount-min" 
+                        min="1" max="5" value="2" />
+                    <span class="word-count-separator">to</span>
+                    <input type="number" id="wordcount-max" 
+                        min="1" max="5" value="3" />
+                </div>
+            </div>
+
+            <!-- Settings Actions -->
+            <div class="settings-actions">
+                <button id="save-btn">
+                    Save Settings
+                </button>
+                <button id="load-btn">
+                    Load Settings
+                </button>
+                <button id="reset-btn">
+                    Reset to Defaults
+                </button>
+            </div>
+        </section>
+
+    </main>
+</body>
+
+</html>
