@@ -5,52 +5,35 @@
 
 /* global Office Word console */
 
-import { loadSettings } from "../utils/settings";
+import { loadSettingsInContext } from "../utils/settings";
 import { indexArmenianNames } from "../utils/wordOps";
 
 /**
- * Index Armenian names in the document using saved settings
- * This command can be triggered from the ribbon without opening the task pane
- * @param event
+ * Index Armenian names in the document using saved settings.
+ * Triggered from the ribbon without opening the task pane.
  */
 export async function indexArmenianNamesCommand(event: Office.AddinCommands.Event) {
   try {
     await Word.run(async (context) => {
-      // Load settings from document
-      const settings = await loadSettings();
-      
-      // Run indexing with default settings
+      // Load settings within the same context — avoids nested Word.run()
+      const settings = await loadSettingsInContext(context);
+
       const result = await indexArmenianNames(context, settings);
-      
-      // Show completion message
-      if (result.indexed === 0) {
-        Office.context.ui.displayDialogAsync(
-          "about:blank",  
-          { height: 30, width: 40 },
-          (asyncResult) => {
-            if (asyncResult.status === Office.AsyncResultStatus.Succeeded) {
-              const dialog = asyncResult.value;
-              dialog.addEventHandler(Office.EventType.DialogMessageReceived, () => {
-                dialog.close();
-              });
-            }
-          }
-        );
-        console.log("No names were indexed");
-      } else {
-        console.log(`Successfully indexed ${result.indexed} names (${result.skipped} skipped)`);
+
+      console.log(
+        result.indexed > 0
+          ? `Indexed ${result.indexed} names (${result.skipped} skipped).`
+          : "No Armenian names found. Check pattern and exceptions."
+      );
+
+      if (result.errors.length > 0) {
+        console.warn("Indexing errors:", result.errors.join("\n"));
       }
     });
   } catch (error) {
-    // Note: In a production add-in, notify the user through your add-in's UI.
-    console.error("Error indexing names:", error);
+    console.error("Error indexing names:", error instanceof Error ? error.message : String(error));
   }
 
-  // Be sure to indicate when the add-in command function is complete
+  // Always signal completion so Word unblocks the ribbon button
   event.completed();
-}
-
-// Legacy export for backwards compatibility
-export async function insertBlueParagraphInWord(event: Office.AddinCommands.Event) {
-  await indexArmenianNamesCommand(event);
 }

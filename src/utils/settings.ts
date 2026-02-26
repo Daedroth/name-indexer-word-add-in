@@ -26,12 +26,12 @@ const SETTINGS_KEYS = {
 
 /**
  * Get default settings
- * 
+ *
  * @returns Default IndexerSettings object
  */
 export function getDefaultSettings(): IndexerSettings {
   const defaultPattern = createArmenianNamePattern(DEFAULT_WORD_COUNT);
-  
+
   return {
     exceptions: [],
     pattern: defaultPattern.source,
@@ -41,54 +41,68 @@ export function getDefaultSettings(): IndexerSettings {
 }
 
 /**
- * Load settings from document properties
- * Falls back to defaults if not found
- * 
+ * Load settings from an existing Word request context.
+ * Use this variant when already inside a Word.run() call.
+ *
+ * @param context - Word request context
+ * @returns Promise resolving to IndexerSettings
+ */
+export async function loadSettingsInContext(context: Word.RequestContext): Promise<IndexerSettings> {
+  const settings = context.document.settings;
+
+  // Queue getItemOrNullObject calls for all keys (no sync yet)
+  const exceptionsItem = settings.getItemOrNullObject(SETTINGS_KEYS.EXCEPTIONS);
+  const patternItem = settings.getItemOrNullObject(SETTINGS_KEYS.PATTERN);
+  const suffixesItem = settings.getItemOrNullObject(SETTINGS_KEYS.SUFFIXES);
+  const wordCountMinItem = settings.getItemOrNullObject(SETTINGS_KEYS.WORD_COUNT_MIN);
+  const wordCountMaxItem = settings.getItemOrNullObject(SETTINGS_KEYS.WORD_COUNT_MAX);
+
+  // Load value and isNullObject for all at once (single sync)
+  exceptionsItem.load("value");
+  patternItem.load("value");
+  suffixesItem.load("value");
+  wordCountMinItem.load("value");
+  wordCountMaxItem.load("value");
+
+  await context.sync();
+
+  const defaults = getDefaultSettings();
+
+  const exceptions = exceptionsItem.isNullObject
+    ? defaults.exceptions
+    : JSON.parse(exceptionsItem.value as string);
+
+  const pattern = patternItem.isNullObject ? defaults.pattern : (patternItem.value as string);
+
+  const suffixes = suffixesItem.isNullObject
+    ? defaults.suffixes
+    : JSON.parse(suffixesItem.value as string);
+
+  const wordCount = {
+    min: wordCountMinItem.isNullObject
+      ? defaults.wordCount.min
+      : parseInt(wordCountMinItem.value as string, 10),
+    max: wordCountMaxItem.isNullObject
+      ? defaults.wordCount.max
+      : parseInt(wordCountMaxItem.value as string, 10)
+  };
+
+  return { exceptions, pattern, suffixes, wordCount };
+}
+
+/**
+ * Load settings from document properties.
+ * Falls back to defaults if not found.
+ *
  * @returns Promise resolving to IndexerSettings
  */
 export async function loadSettings(): Promise<IndexerSettings> {
-  return Word.run(async (context) => {
-    const settings = context.document.settings;
-    settings.load("items");
-    await context.sync();
-
-    const defaults = getDefaultSettings();
-
-    // Load exceptions
-    const exceptionsJson = settings.items[SETTINGS_KEYS.EXCEPTIONS];
-    const exceptions = exceptionsJson 
-      ? JSON.parse(exceptionsJson) 
-      : defaults.exceptions;
-
-    // Load pattern
-    const pattern = settings.items[SETTINGS_KEYS.PATTERN] || defaults.pattern;
-
-    // Load suffixes
-    const suffixesJson = settings.items[SETTINGS_KEYS.SUFFIXES];
-    const suffixes = suffixesJson 
-      ? JSON.parse(suffixesJson) 
-      : defaults.suffixes;
-
-    // Load word count
-    const wordCountMin = settings.items[SETTINGS_KEYS.WORD_COUNT_MIN];
-    const wordCountMax = settings.items[SETTINGS_KEYS.WORD_COUNT_MAX];
-    const wordCount = {
-      min: wordCountMin ? parseInt(wordCountMin, 10) : defaults.wordCount.min,
-      max: wordCountMax ? parseInt(wordCountMax, 10) : defaults.wordCount.max
-    };
-
-    return {
-      exceptions,
-      pattern,
-      suffixes,
-      wordCount
-    };
-  });
+  return Word.run((context) => loadSettingsInContext(context));
 }
 
 /**
  * Save settings to document properties
- * 
+ *
  * @param settings - Settings to save
  * @returns Promise that resolves when settings are saved
  */
@@ -96,16 +110,9 @@ export async function saveSettings(settings: IndexerSettings): Promise<void> {
   return Word.run(async (context) => {
     const docSettings = context.document.settings;
 
-    // Save exceptions
     docSettings.add(SETTINGS_KEYS.EXCEPTIONS, JSON.stringify(settings.exceptions));
-
-    // Save pattern
     docSettings.add(SETTINGS_KEYS.PATTERN, settings.pattern);
-
-    // Save suffixes
     docSettings.add(SETTINGS_KEYS.SUFFIXES, JSON.stringify(settings.suffixes));
-
-    // Save word count
     docSettings.add(SETTINGS_KEYS.WORD_COUNT_MIN, settings.wordCount.min.toString());
     docSettings.add(SETTINGS_KEYS.WORD_COUNT_MAX, settings.wordCount.max.toString());
 
@@ -114,20 +121,23 @@ export async function saveSettings(settings: IndexerSettings): Promise<void> {
 }
 
 /**
- * Clear all settings from document properties
- * Note: Office.js doesn't provide a direct way to enumerate and delete settings
- * This function overwrites with empty values instead
- * 
- * @returns Promise that resolves when settings are cleared
+ * Delete all add-in settings from document properties
+ *
+ * @returns Promise that resolves when settings are deleted
  */
 export async function clearSettings(): Promise<void> {
   return Word.run(async (context) => {
     const settings = context.document.settings;
 
-    // Overwrite with empty/default values instead of deleting
-    Object.values(SETTINGS_KEYS).forEach(key => {
-      settings.add(key, "");
-    });
+    // Use getItemOrNullObject + delete() for each key
+    for (const key of Object.values(SETTINGS_KEYS)) {
+      const item = settings.getItemOrNullObject(key);
+      item.load("isNullObject");
+      await context.sync();
+      if (!item.isNullObject) {
+        item.delete();
+      }
+    }
 
     await context.sync();
   });

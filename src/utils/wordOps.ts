@@ -6,71 +6,113 @@
 /* global Word */
 
 import { IndexerSettings, IndexResult, NameMatch, ProgressCallback } from "../types";
-import { 
-  parseArmenianName, 
-  normalizeArmenianSurname, 
-  parseExceptionsList, 
-  isExcluded 
+import {
+  parseArmenianName,
+  normalizeArmenianSurname,
+  parseExceptionsList,
+  isExcluded
 } from "./armenian";
 
+/** Extract an error message from an unknown thrown value */
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
- * Find all Armenian names in the document matching the pattern
- * Uses paragraph-by-paragraph search since Office.js doesn't support regex
- * 
+ * Find all Armenian names in the document matching the pattern.
+ *
+ * Searches paragraph-by-paragraph (Office.js has no native regex search).
+ * Paragraph texts are loaded in a single batch to minimize sync round-trips.
+ * When the same name text appears multiple times in a paragraph, each
+ * occurrence is matched to the correct search-result range by occurrence index.
+ *
  * @param context - Word request context
- * @param pattern - Regex pattern to match
+ * @param pattern - Regex pattern to match (must have the `g` flag)
+ * @param cancelToken - Optional object; set `cancelled = true` to abort mid-scan
  * @returns Promise resolving to array of name matches
  */
 export async function findArmenianNamesInDocument(
   context: Word.RequestContext,
-  pattern: RegExp
+  pattern: RegExp,
+  cancelToken?: { cancelled: boolean }
 ): Promise<NameMatch[]> {
   const matches: NameMatch[] = [];
-  
-  // Get all paragraphs
+
+  // --- Batch 1: load all paragraph items ---
   const paragraphs = context.document.body.paragraphs;
   paragraphs.load("items");
   await context.sync();
 
+  // --- Batch 2: load all paragraph texts in a single sync ---
+  paragraphs.items.forEach((p) => p.load("text"));
+  await context.sync();
+
   let globalOffset = 0;
 
-  // Search each paragraph
   for (let i = 0; i < paragraphs.items.length; i++) {
-    const paragraph = paragraphs.items[i];
-    paragraph.load("text");
-    await context.sync();
+    if (cancelToken?.cancelled) break;
 
+    const paragraph = paragraphs.items[i];
     const text = paragraph.text;
-    
-    // Reset regex lastIndex for each paragraph
+
+    // Reset regex state for each paragraph
     pattern.lastIndex = 0;
-    
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      
-      // Get the actual range by searching for the matched text
-      // This is more reliable than character offset calculations
-      const searchResults = paragraph.search(match[0], {
+
+    // Collect all regex matches in this paragraph
+    const regexMatches: RegExpExecArray[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      regexMatches.push(m);
+    }
+
+    if (regexMatches.length === 0) {
+      globalOffset += text.length;
+      continue;
+    }
+
+    // Track how many times each unique name text has appeared so far in this
+    // paragraph so we can pick the correct search-result by occurrence index.
+    const occurrencesSeen = new Map<string, number>();
+
+    // Queue all paragraph.search() calls before syncing (one sync per paragraph)
+    const searchResultRefs: Array<{
+      regexMatch: RegExpExecArray;
+      searchResults: Word.RangeCollection;
+      occurrenceIndex: number;
+    }> = [];
+
+    for (const regexMatch of regexMatches) {
+      const matchText = regexMatch[0];
+      const seenCount = occurrencesSeen.get(matchText) ?? 0;
+      occurrencesSeen.set(matchText, seenCount + 1);
+
+      const searchResults = paragraph.search(matchText, {
         matchCase: true,
         matchWholeWord: false
       });
       searchResults.load("items");
-      await context.sync();
-      
-      if (searchResults.items.length > 0) {
-        // Use the first search result that matches our position
-        const foundRange = searchResults.items[0];
-        
+
+      searchResultRefs.push({
+        regexMatch,
+        searchResults,
+        occurrenceIndex: seenCount // 0-based index of this occurrence in the paragraph
+      });
+    }
+
+    // Single sync per paragraph resolves all searches at once
+    await context.sync();
+
+    for (const { regexMatch, searchResults, occurrenceIndex } of searchResultRefs) {
+      if (searchResults.items.length > occurrenceIndex) {
         matches.push({
-          text: match[0],
-          range: foundRange,
-          startIndex: globalOffset + match.index,
-          length: match[0].length
+          text: regexMatch[0],
+          range: searchResults.items[occurrenceIndex],
+          startIndex: globalOffset + regexMatch.index,
+          length: regexMatch[0].length
         });
       }
     }
-    
-    // Update global offset for next paragraph
+
     globalOffset += text.length;
   }
 
@@ -78,33 +120,25 @@ export async function findArmenianNamesInDocument(
 }
 
 /**
- * Mark an index entry at the specified range
- * Inserts an XE (index entry) field
- * 
- * @param context - Word request context
+ * Mark an index entry at the specified range.
+ * Inserts an XE (index entry) field immediately before the matched text.
+ *
  * @param range - Range where to insert the index entry
- * @param entry - Index entry text
+ * @param entry - Index entry text (the name as it should appear in the index)
  */
-export async function markIndexEntry(
-  context: Word.RequestContext,
-  range: Word.Range,
-  entry: string
-): Promise<void> {
-  // Insert XE field before the matched text
-  // XE field format: { XE "entry text" }
-  try {
-    range.insertField(Word.InsertLocation.before, "XE", `"${entry}"`);
-  } catch (error) {
-    // Fallback: insert as text if insertField doesn't work for XE
-    const fieldCode = `{ XE "${entry}" }`;
-    range.insertText(fieldCode, Word.InsertLocation.before);
-  }
+export function markIndexEntry(range: Word.Range, entry: string): void {
+  // Word.FieldType.xe = "XE" — the correct enum value for index-entry fields.
+  // The `text` argument provides the field data: the quoted entry string.
+  range.insertField(Word.InsertLocation.before, Word.FieldType.xe, `"${entry}"`, false);
 }
 
 /**
- * Clear all index entries from the document
- * Ported from VBA ClearAllIndexEntries
- * 
+ * Clear all XE index entries from the document body.
+ * Ported from VBA ClearAllIndexEntries.
+ *
+ * Field codes are loaded in a single batch before the deletion loop to
+ * avoid one sync per field.
+ *
  * @param context - Word request context
  * @param onProgress - Optional progress callback
  * @returns Promise resolving to number of entries deleted
@@ -117,31 +151,30 @@ export async function clearAllIndexEntries(
   fields.load("items");
   await context.sync();
 
-  const total = fields.items.length;
-  
-  if (total === 0) {
+  if (fields.items.length === 0) {
     return 0;
   }
 
+  // --- Batch: load all field codes in a single sync ---
+  fields.items.forEach((f) => f.load("code"));
+  await context.sync();
+
+  const total = fields.items.length;
   let deleted = 0;
 
-  // Iterate backwards to avoid index shifting issues
+  // Iterate backwards so pending deletions don't shift remaining indices
   for (let i = total - 1; i >= 0; i--) {
     const field = fields.items[i];
-    field.load("code");
-    await context.sync();
+    const fieldCode = (field.code ?? "").trim().toUpperCase();
 
-    // Check if field code contains XE (index entry)
-    // Note: FieldType enum may not have fieldIndexEntry, so check by code
-    const fieldCode = field.code || "";
-    if (fieldCode.trim().toUpperCase().startsWith("XE")) {
+    if (fieldCode.startsWith("XE")) {
       field.delete();
       deleted++;
-      
-      // Sync every 10 deletions to avoid too many pending operations
+
+      // Sync every 10 deletions to keep the operation queue manageable
       if (deleted % 10 === 0) {
         await context.sync();
-        
+
         if (onProgress) {
           const percent = Math.floor(((total - i) / total) * 100);
           onProgress(percent, `Clearing index entries… ${deleted} removed`);
@@ -150,7 +183,6 @@ export async function clearAllIndexEntries(
     }
   }
 
-  // Final sync
   await context.sync();
 
   if (onProgress) {
@@ -161,18 +193,20 @@ export async function clearAllIndexEntries(
 }
 
 /**
- * Index all Armenian names in the document
- * Main orchestration function ported from VBA AutoIndexArmenianNames
- * 
+ * Index all Armenian names in the document.
+ * Main orchestration function — ported from VBA AutoIndexArmenianNames.
+ *
  * @param context - Word request context
  * @param settings - Indexer settings
  * @param onProgress - Optional progress callback
+ * @param cancelToken - Optional object; set `cancelled = true` to abort
  * @returns Promise resolving to index result
  */
 export async function indexArmenianNames(
   context: Word.RequestContext,
   settings: IndexerSettings,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  cancelToken?: { cancelled: boolean }
 ): Promise<IndexResult> {
   const result: IndexResult = {
     indexed: 0,
@@ -181,24 +215,22 @@ export async function indexArmenianNames(
   };
 
   try {
-    // Parse exceptions list
-    const exceptionsText = settings.exceptions.join("\n");
-    const exceptions = parseExceptionsList(exceptionsText);
+    const exceptions = parseExceptionsList(settings.exceptions.join("\n"));
 
     if (onProgress) {
       onProgress(0, "Searching for Armenian names…");
     }
 
-    // Create regex pattern from settings
     const pattern = new RegExp(settings.pattern, "g");
+    const matches = await findArmenianNamesInDocument(context, pattern, cancelToken);
 
-    // Find all matching names
-    const matches = await findArmenianNamesInDocument(context, pattern);
+    if (cancelToken?.cancelled) {
+      if (onProgress) onProgress(100, "Cancelled");
+      return result;
+    }
 
     if (matches.length === 0) {
-      if (onProgress) {
-        onProgress(100, "No Armenian names found");
-      }
+      if (onProgress) onProgress(100, "No Armenian names found");
       return result;
     }
 
@@ -206,71 +238,96 @@ export async function indexArmenianNames(
       onProgress(10, `Found ${matches.length} potential names`);
     }
 
-    // Process matches in reverse order (like VBA) to avoid position shifting
+    // Process in reverse order (like VBA) to avoid field-insertion position drift
     for (let i = matches.length - 1; i >= 0; i--) {
+      if (cancelToken?.cancelled) {
+        if (onProgress) onProgress(100, `Cancelled — ${result.indexed} indexed so far`);
+        break;
+      }
+
       const match = matches[i];
       const fullName = match.text;
 
       try {
-        // Check if any word is in exceptions list
         if (isExcluded(fullName, exceptions)) {
           result.skipped++;
           continue;
         }
 
-        // Parse name into first and last
         const parsed = parseArmenianName(fullName);
-        
+
         if (!parsed.firstName || !parsed.lastName) {
           result.skipped++;
           continue;
         }
 
-        // Normalize surname
-        const normalizedSurname = normalizeArmenianSurname(
-          parsed.lastName,
-          settings.suffixes
-        );
-
-        // Build normalized name (firstName + normalized surname, no patronymic)
+        const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
         const normalizedName = `${parsed.firstName} ${normalizedSurname}`;
 
-        // Mark index entry
-        await markIndexEntry(context, match.range, normalizedName);
+        markIndexEntry(match.range, normalizedName);
         result.indexed++;
 
-        // Sync every 5 entries to balance performance and responsiveness
+        // Sync every 5 entries to balance performance and Office.js queue depth
         if (result.indexed % 5 === 0) {
           await context.sync();
-          
+
           if (onProgress) {
             const percent = Math.floor(10 + ((matches.length - i) / matches.length) * 85);
-            onProgress(
-              percent, 
-              `Indexing… ${result.indexed} indexed, ${result.skipped} skipped`
-            );
+            onProgress(percent, `Indexing… ${result.indexed} indexed, ${result.skipped} skipped`);
           }
         }
       } catch (error) {
-        result.errors.push(`Error processing "${fullName}": ${error.message}`);
+        result.errors.push(`Error processing "${fullName}": ${toErrorMessage(error)}`);
         result.skipped++;
       }
     }
 
-    // Final sync
     await context.sync();
 
-    if (onProgress) {
-      onProgress(
-        100, 
-        `Complete: ${result.indexed} indexed, ${result.skipped} skipped`
-      );
+    if (onProgress && !cancelToken?.cancelled) {
+      onProgress(100, `Complete: ${result.indexed} indexed, ${result.skipped} skipped`);
     }
-
   } catch (error) {
-    result.errors.push(`Indexing error: ${error.message}`);
+    result.errors.push(`Indexing error: ${toErrorMessage(error)}`);
     throw error;
   }
 
   return result;
+}
+
+/**
+ * Preview which names would be indexed without writing any XE fields.
+ * Returns the sorted, deduplicated list of normalized index strings.
+ *
+ * @param context - Word request context
+ * @param settings - Indexer settings
+ * @param onProgress - Optional progress callback
+ * @returns Promise resolving to sorted array of index entry strings
+ */
+export async function previewArmenianNames(
+  context: Word.RequestContext,
+  settings: IndexerSettings,
+  onProgress?: ProgressCallback
+): Promise<string[]> {
+  if (onProgress) onProgress(0, "Searching for Armenian names…");
+
+  const exceptions = parseExceptionsList(settings.exceptions.join("\n"));
+  const pattern = new RegExp(settings.pattern, "g");
+  const matches = await findArmenianNamesInDocument(context, pattern);
+
+  const entries: string[] = [];
+
+  for (const match of matches) {
+    if (isExcluded(match.text, exceptions)) continue;
+
+    const parsed = parseArmenianName(match.text);
+    if (!parsed.firstName || !parsed.lastName) continue;
+
+    const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
+    entries.push(`${parsed.firstName} ${normalizedSurname}`);
+  }
+
+  if (onProgress) onProgress(100, `Preview complete: ${entries.length} names found`);
+
+  return Array.from(new Set(entries)).sort();
 }

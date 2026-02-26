@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- Gradient background -->
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0078d4"/>
+      <stop offset="100%" stop-color="#003a6c"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="32" fill="url(#bg-grad)"/>
+  <!-- Subtle accent ring -->
+  <circle cx="96" cy="96" r="72"
+          fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="8"/>
+  <!-- Diagonal index marker accent -->
+  <line x1="138" y1="36" x2="162" y2="148"
+        stroke="rgba(255,255,255,0.15)" stroke-width="18" stroke-linecap="round"/>
+  <!-- Armenian Ա lettermark -->
+  <text x="96" y="136"
+        text-anchor="middle"
+        font-family="Noto Sans Armenian, Mshtakan, serif"
+        font-size="128"
+        font-weight="700"
+        fill="#ffffff">Ա</text>
+</svg>

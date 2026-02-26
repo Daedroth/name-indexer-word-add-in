@@ -8,10 +8,10 @@
         "additionalLanguages": []
     },
     "developer": {
-        "name": "Contoso",
-        "websiteUrl": "https://www.contoso.com",
-        "privacyUrl": "https://www.contoso.com/privacy",
-        "termsOfUseUrl": "https://www.contoso.com/servicesagreement"
+        "name": "CatOnPillow Studio",
+        "websiteUrl": "https://www.catonpillow.com",
+        "privacyUrl": "https://www.catonpillow.com/privacy",
+        "termsOfUseUrl": "https://www.catonpillow.com/servicesagreement"
     },
     "name": {
         "short": "NameIndexer",
@@ -27,7 +27,7 @@
     },
     "accentColor": "#230201",
     "validDomains": [
-        "contoso.com"
+        "catonpillow.com"
     ],
     "authorization": {
         "permissions": {
@@ -65,7 +65,7 @@
                     "id": "TaskPaneRuntime",
                     "type": "general",
                     "code": {
-                        "page": "https://www.contoso.com/taskpane.html"
+                        "page": "https://daedroth.github.io/name-indexer-word-add-in/dist/taskpane.html"
                     },
                     "lifetime": "short",
                     "actions": [
@@ -81,8 +81,8 @@
                     "id": "CommandsRuntime",
                     "type": "general",
                     "code": {
-                        "page": "https://www.contoso.com/commands.html",
-                        "script": "https://www.contoso.com/commands.js"
+                        "page": "https://daedroth.github.io/name-indexer-word-add-in/dist/commands.html",
+                        "script": "https://daedroth.github.io/name-indexer-word-add-in/dist/commands.js"
                     },
                     "lifetime": "short",
                     "actions": [
@@ -109,15 +109,15 @@
                                     "icons": [
                                         {
                                             "size": 16,
-                                            "url": "https://www.contoso.com/assets/icon-16.png"
+                                            "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-16.png"
                                         },
                                         {
                                             "size": 32,
-                                            "url": "https://www.contoso.com/assets/icon-32.png"
+                                            "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-32.png"
                                         },
                                         {
                                             "size": 80,
-                                            "url": "https://www.contoso.com/assets/icon-80.png"
+                                            "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-80.png"
                                         }
                                     ],
                                     "controls": [
@@ -128,15 +128,15 @@
                                             "icons": [
                                                 {
                                                     "size": 16,
-                                                    "url": "https://www.contoso.com/assets/icon-16.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-settings-16.png"
                                                 },
                                                 {
                                                     "size": 32,
-                                                    "url": "https://www.contoso.com/assets/icon-32.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-settings-16.png"
                                                 },
                                                 {
                                                     "size": 80,
-                                                    "url": "https://www.contoso.com/assets/icon-80.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-settings-80.png"
                                                 }
                                             ],
                                             "supertip": {
@@ -152,15 +152,15 @@
                                             "icons": [
                                                 {
                                                     "size": 16,
-                                                    "url": "https://www.contoso.com/assets/icon-16.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-index-16.png"
                                                 },
                                                 {
                                                     "size": 32,
-                                                    "url": "https://www.contoso.com/assets/icon-32.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-index-16.png"
                                                 },
                                                 {
                                                     "size": 80,
-                                                    "url": "https://www.contoso.com/assets/icon-80.png"
+                                                    "url": "https://daedroth.github.io/name-indexer-word-add-in/dist/assets/icon-index-80.png"
                                                 }
                                             ],
                                             "supertip": {

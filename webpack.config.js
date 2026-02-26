@@ -5,7 +5,7 @@ const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 
 const urlDev = "https://localhost:3000/";
-const urlProd = "https://www.contoso.com/"; // CHANGE THIS TO YOUR PRODUCTION DEPLOYMENT LOCATION
+const urlProd = "https://daedroth.github.io/name-indexer-word-add-in/dist/";
 
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
@@ -14,11 +14,12 @@ async function getHttpsOptions() {
 
 module.exports = async (env, options) => {
   const dev = options.mode === "development";
+
   const config = {
     devtool: "source-map",
     entry: {
       polyfill: ["core-js/stable", "regenerator-runtime/runtime"],
-      taskpane: ["./src/taskpane/taskpane.ts", "./src/taskpane/taskpane.html"],
+      taskpane: "./src/taskpane/taskpane.ts",
       commands: "./src/commands/commands.ts",
     },
     output: {
@@ -43,6 +44,10 @@ module.exports = async (env, options) => {
           test: /\.html$/,
           exclude: /node_modules/,
           use: "html-loader",
+        },
+        {
+          test: /\.css$/,
+          use: ["style-loader", "css-loader"],
         },
         {
           test: /\.(png|jpg|jpeg|gif|ico)$/,
@@ -76,6 +81,17 @@ module.exports = async (env, options) => {
               }
             },
           },
+          {
+            from: "manifest.xml",
+            to: "manifest.xml",
+            transform(content) {
+              if (dev) {
+                return content;
+              } else {
+                return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
+              }
+            },
+          },
         ],
       }),
       new HtmlWebpackPlugin({
@@ -90,7 +106,9 @@ module.exports = async (env, options) => {
       },
       server: {
         type: "https",
-        options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
+        options: (env && env.WEBPACK_BUILD) || options.https !== undefined
+          ? options.https
+          : await getHttpsOptions(),
       },
       port: process.env.npm_package_config_dev_server_port || 3000,
     },

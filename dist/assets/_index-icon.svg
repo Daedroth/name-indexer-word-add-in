@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Document / book body -->
+  <rect x="10" y="12" width="58" height="76" rx="4"
+        fill="#ffffff" stroke="#0078d4" stroke-width="5"/>
+  <!-- Text lines on document -->
+  <line x1="22" y1="34" x2="56" y2="34" stroke="#0078d4" stroke-width="4.5" stroke-linecap="round"/>
+  <line x1="22" y1="47" x2="56" y2="47" stroke="#0078d4" stroke-width="4.5" stroke-linecap="round"/>
+  <line x1="22" y1="60" x2="56" y2="60" stroke="#0078d4" stroke-width="4.5" stroke-linecap="round"/>
+  <line x1="22" y1="73" x2="44" y2="73" stroke="#0078d4" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Index entry marker flag (right-side bookmark) -->
+  <polygon points="62,26 86,20 86,52 62,46" fill="#0078d4"/>
+  <!-- Small Ա lettermark inside the flag -->
+  <text x="74" y="42"
+        text-anchor="middle"
+        font-family="Noto Sans Armenian, Mshtakan, serif"
+        font-size="20"
+        font-weight="700"
+        fill="#ffffff">Ա</text>
+</svg>

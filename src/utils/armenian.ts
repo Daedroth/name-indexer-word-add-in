@@ -118,18 +118,9 @@ export function parseExceptionsList(text: string): Set<string> {
     return exceptions;
   }
 
-  // Normalize line endings
-  let normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-
-  // Split by newline or comma
-  let items: string[];
-  if (normalized.includes("\n")) {
-    items = normalized.split("\n");
-  } else if (normalized.includes(",")) {
-    items = normalized.split(",");
-  } else {
-    items = [normalized];
-  }
+  // Normalize line endings then split by both newlines and commas simultaneously
+  const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const items = normalized.split(/[\n,]+/);
 
   // Trim and add non-empty items
   items.forEach(item => {
