@@ -8,8 +8,8 @@
   <Version>1.0.0.0</Version>
   <ProviderName>CatOnPillow Studio</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Armenian Name Indexer"/>
-  <Description DefaultValue="Automatically index Armenian names in your Word document."/>
+  <DisplayName DefaultValue="Name Indexer"/>
+  <Description DefaultValue="Index names in your Word document using configurable patterns and suffix rules (defaults optimized for Armenian)."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-80.png"/>
   <SupportUrl DefaultValue="https://www.catonpillow.com"/>
@@ -58,21 +58,6 @@
                     <SourceLocation resid="Taskpane.Url"/>
                   </Action>
                 </Control>
-                <Control xsi:type="Button" id="ActionButton">
-                  <Label resid="ActionButton.Label"/>
-                  <Supertip>
-                    <Title resid="ActionButton.Label"/>
-                    <Description resid="ActionButton.Tooltip"/>
-                  </Supertip>
-                  <Icon>
-                    <bt:Image size="16" resid="IndexIcon.16x16"/>
-                    <bt:Image size="32" resid="IndexIcon.32x32"/>
-                    <bt:Image size="80" resid="IndexIcon.80x80"/>
-                  </Icon>
-                  <Action xsi:type="ExecuteFunction">
-                    <FunctionName>indexArmenianNamesCommand</FunctionName>
-                  </Action>
-                </Control>
               </Group>
             </OfficeTab>
           </ExtensionPoint>
@@ -89,10 +74,6 @@
         <bt:Image id="SettingsIcon.16x16" DefaultValue="https://localhost:3000/assets/icon-settings-16.png"/>
         <bt:Image id="SettingsIcon.32x32" DefaultValue="https://localhost:3000/assets/icon-settings-32.png"/>
         <bt:Image id="SettingsIcon.80x80" DefaultValue="https://localhost:3000/assets/icon-settings-80.png"/>
-        <!-- Index Button Icons -->
-        <bt:Image id="IndexIcon.16x16" DefaultValue="https://localhost:3000/assets/icon-index-16.png"/>
-        <bt:Image id="IndexIcon.32x32" DefaultValue="https://localhost:3000/assets/icon-index-32.png"/>
-        <bt:Image id="IndexIcon.80x80" DefaultValue="https://localhost:3000/assets/icon-index-80.png"/>
       </bt:Images>
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://go.microsoft.com/fwlink/?LinkId=276812"/>
@@ -100,15 +81,13 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Armenian Name Indexer"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Armenian Name Indexer"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Settings"/>
-        <bt:String id="ActionButton.Label" DefaultValue="Index Names"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Name Indexer"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="Name Indexer"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Name Indexer"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Your add-in loaded successfully. Go to the HOME tab and click the 'Settings' button to get started."/>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Opens the task pane to configure indexing settings."/>
-        <bt:String id="ActionButton.Tooltip" DefaultValue="Automatically index all Armenian names using saved settings."/>
+        <bt:String id="GetStarted.Description" DefaultValue="Your add-in loaded successfully. Go to the HOME tab and click 'Name Indexer' to get started."/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Opens the Name Indexer task pane to preview and index names, view progress, and adjust settings."/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

@@ -1,5 +1,5 @@
 /**
- * Settings Manager for Armenian Name Indexer
+ * Settings Manager for Name Indexer
  * Handles loading and saving settings to document properties
  */
 
@@ -22,6 +22,9 @@ const SETTINGS_KEYS = {
   SUFFIXES: SETTINGS_PREFIX + "suffixes",
   WORD_COUNT_MIN: SETTINGS_PREFIX + "wordCountMin",
   WORD_COUNT_MAX: SETTINGS_PREFIX + "wordCountMax",
+  NORMALIZATION_ENABLED: SETTINGS_PREFIX + "normalizationEnabled",
+  NORMALIZATION_MODE: SETTINGS_PREFIX + "normalizationMode",
+  NORMALIZATION_CUSTOM_RULES: SETTINGS_PREFIX + "normalizationCustomRules",
 };
 
 /**
@@ -37,6 +40,12 @@ export function getDefaultSettings(): IndexerSettings {
     pattern: defaultPattern.source,
     suffixes: DEFAULT_SUFFIXES,
     wordCount: DEFAULT_WORD_COUNT,
+    // Preserve current behavior: Armenian-optimized normalization on by default.
+    normalization: {
+      enabled: true,
+      mode: "armenian",
+      customRules: [],
+    },
   };
 }
 
@@ -56,6 +65,9 @@ export async function loadSettingsInContext(context: Word.RequestContext): Promi
   const suffixesItem = settings.getItemOrNullObject(SETTINGS_KEYS.SUFFIXES);
   const wordCountMinItem = settings.getItemOrNullObject(SETTINGS_KEYS.WORD_COUNT_MIN);
   const wordCountMaxItem = settings.getItemOrNullObject(SETTINGS_KEYS.WORD_COUNT_MAX);
+  const normalizationEnabledItem = settings.getItemOrNullObject(SETTINGS_KEYS.NORMALIZATION_ENABLED);
+  const normalizationModeItem = settings.getItemOrNullObject(SETTINGS_KEYS.NORMALIZATION_MODE);
+  const normalizationCustomRulesItem = settings.getItemOrNullObject(SETTINGS_KEYS.NORMALIZATION_CUSTOM_RULES);
 
   // Load value and isNullObject for all at once (single sync)
   exceptionsItem.load("value");
@@ -63,6 +75,9 @@ export async function loadSettingsInContext(context: Word.RequestContext): Promi
   suffixesItem.load("value");
   wordCountMinItem.load("value");
   wordCountMaxItem.load("value");
+  normalizationEnabledItem.load("value");
+  normalizationModeItem.load("value");
+  normalizationCustomRulesItem.load("value");
 
   await context.sync();
 
@@ -79,7 +94,29 @@ export async function loadSettingsInContext(context: Word.RequestContext): Promi
     max: wordCountMaxItem.isNullObject ? defaults.wordCount.max : parseInt(wordCountMaxItem.value as string, 10),
   };
 
-  return { exceptions, pattern, suffixes, wordCount };
+  const normalizationEnabled = normalizationEnabledItem.isNullObject
+    ? defaults.normalization.enabled
+    : (normalizationEnabledItem.value as string) === "true";
+
+  const normalizationMode = normalizationModeItem.isNullObject
+    ? defaults.normalization.mode
+    : (normalizationModeItem.value as IndexerSettings["normalization"]["mode"]);
+
+  const normalizationCustomRules = normalizationCustomRulesItem.isNullObject
+    ? defaults.normalization.customRules
+    : JSON.parse(normalizationCustomRulesItem.value as string);
+
+  return {
+    exceptions,
+    pattern,
+    suffixes,
+    wordCount,
+    normalization: {
+      enabled: normalizationEnabled,
+      mode: normalizationMode,
+      customRules: normalizationCustomRules,
+    },
+  };
 }
 
 /**
@@ -107,6 +144,10 @@ export async function saveSettings(settings: IndexerSettings): Promise<void> {
     docSettings.add(SETTINGS_KEYS.SUFFIXES, JSON.stringify(settings.suffixes));
     docSettings.add(SETTINGS_KEYS.WORD_COUNT_MIN, settings.wordCount.min.toString());
     docSettings.add(SETTINGS_KEYS.WORD_COUNT_MAX, settings.wordCount.max.toString());
+
+    docSettings.add(SETTINGS_KEYS.NORMALIZATION_ENABLED, settings.normalization.enabled ? "true" : "false");
+    docSettings.add(SETTINGS_KEYS.NORMALIZATION_MODE, settings.normalization.mode);
+    docSettings.add(SETTINGS_KEYS.NORMALIZATION_CUSTOM_RULES, JSON.stringify(settings.normalization.customRules));
 
     await context.sync();
   });

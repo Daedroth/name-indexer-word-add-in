@@ -5,17 +5,36 @@
 
 /* global Word */
 
-import { IndexerSettings, IndexResult, NameMatch, ProgressCallback } from "../types";
+import { IndexerSettings, IndexResult, NameMatch, ProgressCallback, NormalizationMode, NormalizationRule } from "../types";
 import { parseArmenianName, normalizeArmenianSurname, parseExceptionsList, isExcluded } from "./armenian";
 
-/** Extract an error message from an unknown thrown value */
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+const clampPercent = (value: number): number => Math.max(0, Math.min(100, Math.floor(value)));
 
-function clampPercent(value: number): number {
-  return Math.max(0, Math.min(100, Math.floor(value)));
-}
+const removeFirstMatchingSuffix = (value: string, suffixes: string[]): string => {
+  const suffix = suffixes.find((s) => s && value.endsWith(s));
+  return suffix ? value.substring(0, value.length - suffix.length) : value;
+};
+
+const applyCustomNormalizationRules = (value: string, rules: NormalizationRule[]): string =>
+  rules.reduce((current, rule) => {
+    const flags = rule.flags && rule.flags.length > 0 ? rule.flags : "g";
+    const regex = new RegExp(rule.pattern, flags);
+    return current.replace(regex, rule.replacement);
+  }, value);
+
+const normalizeSurname = (surname: string, settings: IndexerSettings): string => {
+  const normalization = settings.normalization;
+  if (!normalization?.enabled) return surname;
+
+  const strategies: Record<NormalizationMode, (value: string) => string> = {
+    none: (value) => value,
+    suffix: (value) => removeFirstMatchingSuffix(value, settings.suffixes),
+    armenian: (value) => normalizeArmenianSurname(value, settings.suffixes),
+    custom: (value) => applyCustomNormalizationRules(value, normalization.customRules),
+  };
+
+  return (strategies[normalization.mode] ?? ((value: string) => value))(surname);
+};
 
 function getNormalizedIndexEntryOrNull(
   fullName: string,
@@ -31,7 +50,7 @@ function getNormalizedIndexEntryOrNull(
     return null;
   }
 
-  const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
+  const normalizedSurname = normalizeSurname(parsed.lastName, settings);
   return `${parsed.firstName} ${normalizedSurname}`;
 }
 
@@ -74,7 +93,8 @@ async function indexMatches(
         }
       }
     } catch (error) {
-      result.errors.push(`Error processing "${fullName}": ${toErrorMessage(error)}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      result.errors.push(`Error processing "${fullName}": ${msg}`);
       result.skipped++;
     }
   }
@@ -306,7 +326,7 @@ export async function indexArmenianNames(
     }
 
     if (matches.length === 0) {
-      if (onProgress) onProgress(100, "No Armenian names found");
+      if (onProgress) onProgress(100, "No names found");
       return result;
     }
 
@@ -323,7 +343,8 @@ export async function indexArmenianNames(
       onProgress(100, `Complete: ${result.indexed} indexed, ${result.skipped} skipped`);
     }
   } catch (error) {
-    result.errors.push(`Indexing error: ${toErrorMessage(error)}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    result.errors.push(`Indexing error: ${msg}`);
     throw error;
   }
 
@@ -359,7 +380,7 @@ export async function previewArmenianNames(
     const parsed = parseArmenianName(match.text);
     if (!parsed.firstName || !parsed.lastName) continue;
 
-    const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
+    const normalizedSurname = normalizeSurname(parsed.lastName, settings);
     entries.push(`${parsed.firstName} ${normalizedSurname}`);
   }
 

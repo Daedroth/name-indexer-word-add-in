@@ -1,26 +1,51 @@
 /**
- * TypeScript interfaces and types for Armenian Name Indexer
+ * TypeScript interfaces and types for Name Indexer
  */
 
 /* global Word */
 
+export type NormalizationMode = "none" | "suffix" | "armenian" | "custom";
+
+export interface NormalizationRule {
+  /** Regex source pattern (without surrounding / /) */
+  pattern: string;
+
+  /** Regex flags, e.g. "g", "gi". If omitted, defaults to "g". */
+  flags?: string;
+
+  /** Replacement string (JavaScript-style regex replacement) */
+  replacement: string;
+}
+
 /**
- * Settings for the Armenian name indexer
+ * Settings for the name indexer
  */
 export interface IndexerSettings {
   /** List of words to exclude from indexing (e.g., place names, common words) */
   exceptions: string[];
 
-  /** Regex pattern to match Armenian names (as string for serialization) */
+  /** Regex pattern to match names (as string for serialization) */
   pattern: string;
 
-  /** List of Armenian suffixes to remove from surnames (Unicode escaped strings) */
+  /** Suffixes to remove from surnames (Unicode escaped strings supported) */
   suffixes: string[];
 
   /** Minimum and maximum number of capitalized words to match */
   wordCount: {
     min: number;
     max: number;
+  };
+
+  /** Optional normalization settings applied to the surname when creating index entries */
+  normalization: {
+    /** Master toggle to enable/disable normalization */
+    enabled: boolean;
+
+    /** Which normalization strategy to apply */
+    mode: NormalizationMode;
+
+    /** Custom replacement rules (applied in order) when mode="custom" */
+    customRules: NormalizationRule[];
   };
 }
 
@@ -39,7 +64,7 @@ export interface ParsedName {
 }
 
 /**
- * A matched Armenian name in the document
+ * A matched name in the document
  */
 export interface NameMatch {
   /** Full matched text */

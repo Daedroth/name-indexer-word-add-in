@@ -14,12 +14,12 @@
         "termsOfUseUrl": "https://www.catonpillow.com/servicesagreement"
     },
     "name": {
-        "short": "ArmenianIndexer",
-        "full": "Armenian Name Indexer for Word"
+        "short": "NameIndexer",
+        "full": "Name Indexer for Word"
     },
     "description": {
-        "short": "Automatically index Armenian names in your Word document.",
-        "full": "This add-in automatically identifies and indexes Armenian names in your Word document with customizable exceptions, patterns, and suffix normalization."
+        "short": "Index names in your Word document.",
+        "full": "This add-in indexes names in your Word document using customizable exceptions, patterns, and suffix normalization (defaults optimized for Armenian)."
     },
     "icons": {
         "outline": "assets/outline.png",
@@ -79,22 +79,6 @@
                             "view": "dashboard"
                         }
                     ]
-                },
-                {
-                    "id": "CommandsRuntime",
-                    "type": "general",
-                    "code": {
-                        "page": "https://localhost:3000/commands.html",
-                        "script": "https://localhost:3000/commands.js"
-                    },
-                    "lifetime": "short",
-                    "actions": [
-                        {
-                            "id": "indexArmenianNamesCommand",
-                            "type": "executeFunction",
-                            "displayName": "Index Names"
-                        }
-                    ]
                 }
             ],
             "ribbons": [
@@ -108,7 +92,7 @@
                             "groups": [
                                 {
                                     "id": "msgReadGroup",
-                                    "label": "Armenian Indexer",
+                                    "label": "Name Indexer",
                                     "icons": [
                                         {
                                             "size": 16,
@@ -127,7 +111,7 @@
                                         {
                                             "id": "msgReadOpenPaneButton",
                                             "type": "button",
-                                            "label": "Settings",
+                                            "label": "Name Indexer",
                                             "icons": [
                                                 {
                                                     "size": 16,
@@ -143,34 +127,10 @@
                                                 }
                                             ],
                                             "supertip": {
-                                                "title": "Armenian Indexer Settings",
-                                                "description": "Opens the task pane to configure indexing settings and run operations."
+                                                "title": "Name Indexer",
+                                                "description": "Opens the Name Indexer task pane to preview and index names, view progress, and adjust settings."
                                             },
                                             "actionId": "TaskPaneRuntimeShow"
-                                        },
-                                        {
-                                            "id": "ActionButton",
-                                            "type": "button",
-                                            "label": "Index Names",
-                                            "icons": [
-                                                {
-                                                    "size": 16,
-                                                    "url": "https://localhost:3000/assets/icon-index-16.png"
-                                                },
-                                                {
-                                                    "size": 32,
-                                                    "url": "https://localhost:3000/assets/icon-index-16.png"
-                                                },
-                                                {
-                                                    "size": 80,
-                                                    "url": "https://localhost:3000/assets/icon-index-80.png"
-                                                }
-                                            ],
-                                            "supertip": {
-                                                "title": "Index Armenian Names",
-                                                "description": "Automatically index all Armenian names in the document using saved settings."
-                                            },
-                                            "actionId": "indexArmenianNamesCommand"
                                         }
                                     ]
                                 }

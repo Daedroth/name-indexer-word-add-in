@@ -58,6 +58,16 @@ Office.onReady((info) => {
         (document.getElementById("wordcount-min") as HTMLInputElement).addEventListener("input", regeneratePattern);
         (document.getElementById("wordcount-max") as HTMLInputElement).addEventListener("input", regeneratePattern);
 
+        // Normalization UI
+        (document.getElementById("normalization-enabled") as HTMLInputElement).addEventListener(
+          "change",
+          updateNormalizationUI
+        );
+        (document.getElementById("normalization-mode") as HTMLSelectElement).addEventListener(
+          "change",
+          updateNormalizationUI
+        );
+
         void handleLoadSettings();
       } catch (error) {
         console.error("Taskpane initialization error:", error);
@@ -113,7 +123,8 @@ async function handleLoadSettings() {
 
 async function handleSaveSettings() {
   try {
-    const settings = getSettingsFromUI();
+    const settings = tryGetSettingsFromUI();
+    if (!settings) return;
 
     try {
       new RegExp(settings.pattern);
@@ -161,7 +172,8 @@ function handleFileUpload(event: Event) {
 // ---------------------------------------------------------------------------
 
 async function handleIndexNames() {
-  const settings = getSettingsFromUI();
+  const settings = tryGetSettingsFromUI();
+  if (!settings) return;
   if (!validatePattern(settings.pattern)) return;
 
   cancelToken = { cancelled: false };
@@ -200,7 +212,8 @@ async function handleIndexNames() {
 }
 
 async function handlePreviewNames() {
-  const settings = getSettingsFromUI();
+  const settings = tryGetSettingsFromUI();
+  if (!settings) return;
   if (!validatePattern(settings.pattern)) return;
 
   showProgress(true, false);
@@ -350,34 +363,117 @@ function setButtonsEnabled(enabled: boolean) {
   });
 }
 
-function getSettingsFromUI(): IndexerSettings {
+function parseExceptionsText(text: string): string[] {
+  const exceptions: string[] = [];
+  if (text.trim().length === 0) return exceptions;
+
+  text.split(/[\n,]+/).forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed.length > 0) exceptions.push(trimmed);
+  });
+
+  return exceptions;
+}
+
+function parseSuffixesText(text: string): string[] {
+  return text
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function parseNormalizationCustomRules(text: string): IndexerSettings["normalization"]["customRules"] | null {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    showMessage("Custom normalization rules are empty.", "error");
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!Array.isArray(parsed)) {
+      showMessage("Custom normalization rules must be a JSON array.", "error");
+      return null;
+    }
+
+    return parsed.map((rule, index) => {
+      if (!rule || typeof rule !== "object") {
+        throw new Error(`Rule ${index + 1} must be an object`);
+      }
+
+      const r = rule as { pattern?: unknown; flags?: unknown; replacement?: unknown };
+      if (typeof r.pattern !== "string" || r.pattern.length === 0) {
+        throw new Error(`Rule ${index + 1}: "pattern" must be a non-empty string`);
+      }
+      if (typeof r.replacement !== "string") {
+        throw new Error(`Rule ${index + 1}: "replacement" must be a string`);
+      }
+      if (typeof r.flags !== "undefined" && typeof r.flags !== "string") {
+        throw new Error(`Rule ${index + 1}: "flags" must be a string (if provided)`);
+      }
+
+      // Validate regex compiles (do not retain compiled regex here)
+      // Default to "g" when flags omitted
+      // eslint-disable-next-line no-new
+      new RegExp(r.pattern, (r.flags as string | undefined) ?? "g");
+
+      const normalizedRule: IndexerSettings["normalization"]["customRules"][number] = {
+        pattern: r.pattern,
+        replacement: r.replacement,
+      };
+
+      if (typeof r.flags === "string" && r.flags.length > 0) {
+        normalizedRule.flags = r.flags;
+      }
+
+      return normalizedRule;
+    });
+  } catch (error) {
+    showMessage("Invalid custom normalization rules: " + toErrorMessage(error), "error");
+    return null;
+  }
+}
+
+function getNormalizationSettingsFromUI(): IndexerSettings["normalization"] | null {
+  const enabled = (document.getElementById("normalization-enabled") as HTMLInputElement).checked;
+  const mode = (document.getElementById("normalization-mode") as HTMLSelectElement)
+    .value as IndexerSettings["normalization"]["mode"];
+
+  if (!(["none", "suffix", "armenian", "custom"] as const).includes(mode)) {
+    showMessage("Unknown normalization mode.", "error");
+    return null;
+  }
+
+  const rulesText = (document.getElementById("normalization-rules") as HTMLTextAreaElement).value;
+  const customRules = enabled && mode === "custom" ? parseNormalizationCustomRules(rulesText) : [];
+  if (customRules === null) return null;
+
+  return {
+    enabled,
+    mode,
+    customRules,
+  };
+}
+
+function tryGetSettingsFromUI(): IndexerSettings | null {
   const exceptionsText = (document.getElementById("exceptions-textarea") as HTMLTextAreaElement).value;
   const pattern = (document.getElementById("pattern-input") as HTMLInputElement).value;
   const suffixesText = (document.getElementById("suffixes-textarea") as HTMLTextAreaElement).value;
   const wordCountMin = parseInt((document.getElementById("wordcount-min") as HTMLInputElement).value, 10);
   const wordCountMax = parseInt((document.getElementById("wordcount-max") as HTMLInputElement).value, 10);
 
-  const exceptions: string[] = [];
-  if (exceptionsText.trim().length > 0) {
-    exceptionsText.split(/[\n,]+/).forEach((line) => {
-      const trimmed = line.trim();
-      if (trimmed.length > 0) exceptions.push(trimmed);
-    });
-  }
+  const normalization = getNormalizationSettingsFromUI();
+  if (!normalization) return null;
 
-  const suffixes: string[] = [];
-  if (suffixesText.trim().length > 0) {
-    suffixesText.split(",").forEach((item) => {
-      const trimmed = item.trim();
-      if (trimmed.length > 0) suffixes.push(trimmed);
-    });
-  }
+  const exceptions = parseExceptionsText(exceptionsText);
+  const suffixes = parseSuffixesText(suffixesText);
 
   return {
     exceptions,
     pattern,
     suffixes,
     wordCount: { min: wordCountMin, max: wordCountMax },
+    normalization,
   };
 }
 
@@ -387,6 +483,26 @@ function populateUIFromSettings(settings: IndexerSettings) {
   (document.getElementById("suffixes-textarea") as HTMLTextAreaElement).value = settings.suffixes.join(", ");
   (document.getElementById("wordcount-min") as HTMLInputElement).value = settings.wordCount.min.toString();
   (document.getElementById("wordcount-max") as HTMLInputElement).value = settings.wordCount.max.toString();
+
+  (document.getElementById("normalization-enabled") as HTMLInputElement).checked = settings.normalization.enabled;
+  (document.getElementById("normalization-mode") as HTMLSelectElement).value = settings.normalization.mode;
+  (document.getElementById("normalization-rules") as HTMLTextAreaElement).value = JSON.stringify(
+    settings.normalization.customRules,
+    null,
+    2
+  );
+
+  updateNormalizationUI();
+}
+
+function updateNormalizationUI() {
+  const enabled = (document.getElementById("normalization-enabled") as HTMLInputElement).checked;
+  const modeEl = document.getElementById("normalization-mode") as HTMLSelectElement;
+  const mode = modeEl.value;
+  const custom = document.getElementById("normalization-custom") as HTMLElement;
+
+  modeEl.disabled = !enabled;
+  custom.style.display = enabled && mode === "custom" ? "block" : "none";
 }
 
 function toErrorMessage(error: unknown): string {

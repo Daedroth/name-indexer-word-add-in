@@ -501,6 +501,7 @@ body {
 
 input[type="text"],
 input[type="number"],
+select,
 textarea {
   width: 100%;
   padding: var(--s8) var(--s10);
@@ -519,6 +520,7 @@ textarea {
 
 input[type="text"]:focus-visible,
 input[type="number"]:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: none;
   border-color: var(--border-focus);
@@ -527,11 +529,13 @@ textarea:focus-visible {
 
 body[data-theme="dark"] input[type="text"]:focus-visible,
 body[data-theme="dark"] input[type="number"]:focus-visible,
+body[data-theme="dark"] select:focus-visible,
 body[data-theme="dark"] textarea:focus-visible {
   box-shadow: 0 0 0 2px rgba(71, 158, 245, 0.25);
 }
 
 input:disabled,
+select:disabled,
 textarea:disabled {
   background-color: var(--bg-elevated);
   color: var(--text-disabled);
@@ -546,7 +550,8 @@ textarea {
 
 /* Monospace for code-like inputs */
 #pattern-input,
-#suffixes-textarea {
+#suffixes-textarea,
+#normalization-rules {
   font-family: var(--font-mono);
   font-size: var(--t-sm);
 }

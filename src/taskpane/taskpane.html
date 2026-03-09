@@ -7,7 +7,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Armenian Name Indexer</title>
+    <title>Name Indexer</title>
 
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
@@ -32,7 +32,7 @@
     </section>
 
     <!-- ── Main app body ── -->
-    <main id="app-body" style="display: none;" aria-label="Armenian Name Indexer">
+    <main id="app-body" style="display: none;" aria-label="Name Indexer">
 
         <!-- Actions -->
         <section class="action-group" aria-label="Main actions">
@@ -81,7 +81,7 @@
                     <label for="exceptions-textarea" class="setting-label">Exceptions</label>
                     <p class="setting-hint">Words to skip — comma or newline separated</p>
                     <textarea id="exceptions-textarea" rows="4"
-                        placeholder="Երևան, Հայաստան, ..."></textarea>
+                        placeholder="London, John, ..."></textarea>
                     <div class="file-upload-group">
                         <button class="file-button"
                             onclick="document.getElementById('exceptions-file').click()">
@@ -108,6 +108,32 @@
                     <textarea id="suffixes-textarea" rows="3"
                         spellcheck="false"
                         placeholder="\u056B\u0581, \u056B\u0576, \u0578\u057E, ..."></textarea>
+                </div>
+
+                <!-- Normalization -->
+                <div class="setting-group" aria-label="Normalization settings">
+                    <label class="setting-label">Normalization</label>
+                    <p class="setting-hint">Optional — controls how the surname is normalized before indexing</p>
+
+                    <label style="display:flex; align-items:center; gap: 8px;">
+                        <input type="checkbox" id="normalization-enabled" />
+                        <span>Enable normalization</span>
+                    </label>
+
+                    <label for="normalization-mode" class="setting-label" style="margin-top: 6px;">Mode</label>
+                    <select id="normalization-mode" aria-label="Normalization mode">
+                        <option value="none">None</option>
+                        <option value="suffix">Suffix removal only</option>
+                        <option value="armenian">Armenian surname (default)</option>
+                        <option value="custom">Custom replacements</option>
+                    </select>
+
+                    <div id="normalization-custom" style="display:none;">
+                        <label for="normalization-rules" class="setting-label" style="margin-top: 6px;">Custom rules (JSON)</label>
+                        <p class="setting-hint">JSON array of {"pattern","replacement","flags"?}. Applied to surname, in order.</p>
+                        <textarea id="normalization-rules" rows="5" spellcheck="false"
+                            placeholder='[{"pattern":"\\u0575\\u0561\\u0576\\u0576$","replacement":"\\u0575\\u0561\\u0576"}]'></textarea>
+                    </div>
                 </div>
 
                 <!-- Word count -->
