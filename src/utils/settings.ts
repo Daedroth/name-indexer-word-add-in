@@ -21,7 +21,7 @@ const SETTINGS_KEYS = {
   PATTERN: SETTINGS_PREFIX + "pattern",
   SUFFIXES: SETTINGS_PREFIX + "suffixes",
   WORD_COUNT_MIN: SETTINGS_PREFIX + "wordCountMin",
-  WORD_COUNT_MAX: SETTINGS_PREFIX + "wordCountMax"
+  WORD_COUNT_MAX: SETTINGS_PREFIX + "wordCountMax",
 };
 
 /**
@@ -36,7 +36,7 @@ export function getDefaultSettings(): IndexerSettings {
     exceptions: [],
     pattern: defaultPattern.source,
     suffixes: DEFAULT_SUFFIXES,
-    wordCount: DEFAULT_WORD_COUNT
+    wordCount: DEFAULT_WORD_COUNT,
   };
 }
 
@@ -68,23 +68,15 @@ export async function loadSettingsInContext(context: Word.RequestContext): Promi
 
   const defaults = getDefaultSettings();
 
-  const exceptions = exceptionsItem.isNullObject
-    ? defaults.exceptions
-    : JSON.parse(exceptionsItem.value as string);
+  const exceptions = exceptionsItem.isNullObject ? defaults.exceptions : JSON.parse(exceptionsItem.value as string);
 
   const pattern = patternItem.isNullObject ? defaults.pattern : (patternItem.value as string);
 
-  const suffixes = suffixesItem.isNullObject
-    ? defaults.suffixes
-    : JSON.parse(suffixesItem.value as string);
+  const suffixes = suffixesItem.isNullObject ? defaults.suffixes : JSON.parse(suffixesItem.value as string);
 
   const wordCount = {
-    min: wordCountMinItem.isNullObject
-      ? defaults.wordCount.min
-      : parseInt(wordCountMinItem.value as string, 10),
-    max: wordCountMaxItem.isNullObject
-      ? defaults.wordCount.max
-      : parseInt(wordCountMaxItem.value as string, 10)
+    min: wordCountMinItem.isNullObject ? defaults.wordCount.min : parseInt(wordCountMinItem.value as string, 10),
+    max: wordCountMaxItem.isNullObject ? defaults.wordCount.max : parseInt(wordCountMaxItem.value as string, 10),
   };
 
   return { exceptions, pattern, suffixes, wordCount };
@@ -129,15 +121,14 @@ export async function clearSettings(): Promise<void> {
   return Word.run(async (context) => {
     const settings = context.document.settings;
 
-    // Use getItemOrNullObject + delete() for each key
-    for (const key of Object.values(SETTINGS_KEYS)) {
-      const item = settings.getItemOrNullObject(key);
-      item.load("isNullObject");
-      await context.sync();
+    const items = Object.values(SETTINGS_KEYS).map((key) => settings.getItemOrNullObject(key));
+    await context.sync();
+
+    items.forEach((item) => {
       if (!item.isNullObject) {
         item.delete();
       }
-    }
+    });
 
     await context.sync();
   });

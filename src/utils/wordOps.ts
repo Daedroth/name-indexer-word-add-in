@@ -6,16 +6,78 @@
 /* global Word */
 
 import { IndexerSettings, IndexResult, NameMatch, ProgressCallback } from "../types";
-import {
-  parseArmenianName,
-  normalizeArmenianSurname,
-  parseExceptionsList,
-  isExcluded
-} from "./armenian";
+import { parseArmenianName, normalizeArmenianSurname, parseExceptionsList, isExcluded } from "./armenian";
 
 /** Extract an error message from an unknown thrown value */
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.floor(value)));
+}
+
+function getNormalizedIndexEntryOrNull(
+  fullName: string,
+  settings: IndexerSettings,
+  exceptions: Set<string>
+): string | null {
+  if (isExcluded(fullName, exceptions)) {
+    return null;
+  }
+
+  const parsed = parseArmenianName(fullName);
+  if (!parsed.firstName || !parsed.lastName) {
+    return null;
+  }
+
+  const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
+  return `${parsed.firstName} ${normalizedSurname}`;
+}
+
+async function indexMatches(
+  context: Word.RequestContext,
+  matches: NameMatch[],
+  settings: IndexerSettings,
+  exceptions: Set<string>,
+  result: IndexResult,
+  onProgress?: ProgressCallback,
+  cancelToken?: { cancelled: boolean }
+): Promise<void> {
+  for (let i = matches.length - 1; i >= 0; i--) {
+    if (cancelToken?.cancelled) {
+      if (onProgress) onProgress(100, `Cancelled — ${result.indexed} indexed so far`);
+      return;
+    }
+
+    const match = matches[i];
+    const fullName = match.text;
+
+    try {
+      const normalizedName = getNormalizedIndexEntryOrNull(fullName, settings, exceptions);
+      if (!normalizedName) {
+        result.skipped++;
+        continue;
+      }
+
+      markIndexEntry(match.range, normalizedName);
+      result.indexed++;
+
+      if (result.indexed % 5 === 0) {
+        // eslint-disable-next-line office-addins/no-context-sync-in-loop
+        await context.sync();
+
+        if (onProgress) {
+          const processed = matches.length - i;
+          const percent = clampPercent(10 + (processed / matches.length) * 85);
+          onProgress(percent, `Indexing… ${result.indexed} indexed, ${result.skipped} skipped`);
+        }
+      }
+    } catch (error) {
+      result.errors.push(`Error processing "${fullName}": ${toErrorMessage(error)}`);
+      result.skipped++;
+    }
+  }
 }
 
 /**
@@ -34,7 +96,9 @@ function toErrorMessage(error: unknown): string {
 export async function findArmenianNamesInDocument(
   context: Word.RequestContext,
   pattern: RegExp,
-  cancelToken?: { cancelled: boolean }
+  cancelToken?: { cancelled: boolean },
+  onProgress?: ProgressCallback,
+  progressRange: { start: number; end: number } = { start: 0, end: 10 }
 ): Promise<NameMatch[]> {
   const matches: NameMatch[] = [];
 
@@ -49,8 +113,18 @@ export async function findArmenianNamesInDocument(
 
   let globalOffset = 0;
 
-  for (let i = 0; i < paragraphs.items.length; i++) {
+  const totalParagraphs = paragraphs.items.length;
+  const start = Math.max(0, Math.min(100, progressRange.start));
+  const end = Math.max(0, Math.min(100, progressRange.end));
+  const span = Math.max(0, end - start);
+
+  for (let i = 0; i < totalParagraphs; i++) {
     if (cancelToken?.cancelled) break;
+
+    if (onProgress && totalParagraphs > 0 && i % 25 === 0) {
+      const percent = Math.floor(start + (i / totalParagraphs) * span);
+      onProgress(percent, `Searching… ${i + 1}/${totalParagraphs}`);
+    }
 
     const paragraph = paragraphs.items[i];
     const text = paragraph.text;
@@ -88,18 +162,19 @@ export async function findArmenianNamesInDocument(
 
       const searchResults = paragraph.search(matchText, {
         matchCase: true,
-        matchWholeWord: false
+        matchWholeWord: false,
       });
       searchResults.load("items");
 
       searchResultRefs.push({
         regexMatch,
         searchResults,
-        occurrenceIndex: seenCount // 0-based index of this occurrence in the paragraph
+        occurrenceIndex: seenCount, // 0-based index of this occurrence in the paragraph
       });
     }
 
     // Single sync per paragraph resolves all searches at once
+    // eslint-disable-next-line office-addins/no-context-sync-in-loop
     await context.sync();
 
     for (const { regexMatch, searchResults, occurrenceIndex } of searchResultRefs) {
@@ -108,12 +183,16 @@ export async function findArmenianNamesInDocument(
           text: regexMatch[0],
           range: searchResults.items[occurrenceIndex],
           startIndex: globalOffset + regexMatch.index,
-          length: regexMatch[0].length
+          length: regexMatch[0].length,
         });
       }
     }
 
     globalOffset += text.length;
+  }
+
+  if (onProgress) {
+    onProgress(end, `Searching… ${totalParagraphs}/${totalParagraphs}`);
   }
 
   return matches;
@@ -173,6 +252,7 @@ export async function clearAllIndexEntries(
 
       // Sync every 10 deletions to keep the operation queue manageable
       if (deleted % 10 === 0) {
+        // eslint-disable-next-line office-addins/no-context-sync-in-loop
         await context.sync();
 
         if (onProgress) {
@@ -211,18 +291,14 @@ export async function indexArmenianNames(
   const result: IndexResult = {
     indexed: 0,
     skipped: 0,
-    errors: []
+    errors: [],
   };
 
   try {
     const exceptions = parseExceptionsList(settings.exceptions.join("\n"));
 
-    if (onProgress) {
-      onProgress(0, "Searching for Armenian names…");
-    }
-
     const pattern = new RegExp(settings.pattern, "g");
-    const matches = await findArmenianNamesInDocument(context, pattern, cancelToken);
+    const matches = await findArmenianNamesInDocument(context, pattern, cancelToken, onProgress, { start: 0, end: 10 });
 
     if (cancelToken?.cancelled) {
       if (onProgress) onProgress(100, "Cancelled");
@@ -239,48 +315,7 @@ export async function indexArmenianNames(
     }
 
     // Process in reverse order (like VBA) to avoid field-insertion position drift
-    for (let i = matches.length - 1; i >= 0; i--) {
-      if (cancelToken?.cancelled) {
-        if (onProgress) onProgress(100, `Cancelled — ${result.indexed} indexed so far`);
-        break;
-      }
-
-      const match = matches[i];
-      const fullName = match.text;
-
-      try {
-        if (isExcluded(fullName, exceptions)) {
-          result.skipped++;
-          continue;
-        }
-
-        const parsed = parseArmenianName(fullName);
-
-        if (!parsed.firstName || !parsed.lastName) {
-          result.skipped++;
-          continue;
-        }
-
-        const normalizedSurname = normalizeArmenianSurname(parsed.lastName, settings.suffixes);
-        const normalizedName = `${parsed.firstName} ${normalizedSurname}`;
-
-        markIndexEntry(match.range, normalizedName);
-        result.indexed++;
-
-        // Sync every 5 entries to balance performance and Office.js queue depth
-        if (result.indexed % 5 === 0) {
-          await context.sync();
-
-          if (onProgress) {
-            const percent = Math.floor(10 + ((matches.length - i) / matches.length) * 85);
-            onProgress(percent, `Indexing… ${result.indexed} indexed, ${result.skipped} skipped`);
-          }
-        }
-      } catch (error) {
-        result.errors.push(`Error processing "${fullName}": ${toErrorMessage(error)}`);
-        result.skipped++;
-      }
-    }
+    await indexMatches(context, matches, settings, exceptions, result, onProgress, cancelToken);
 
     await context.sync();
 
@@ -309,11 +344,12 @@ export async function previewArmenianNames(
   settings: IndexerSettings,
   onProgress?: ProgressCallback
 ): Promise<string[]> {
-  if (onProgress) onProgress(0, "Searching for Armenian names…");
-
   const exceptions = parseExceptionsList(settings.exceptions.join("\n"));
   const pattern = new RegExp(settings.pattern, "g");
-  const matches = await findArmenianNamesInDocument(context, pattern);
+  const matches = await findArmenianNamesInDocument(context, pattern, undefined, onProgress, {
+    start: 0,
+    end: 85,
+  });
 
   const entries: string[] = [];
 

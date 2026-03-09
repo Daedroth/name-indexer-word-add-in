@@ -10,13 +10,13 @@
 export interface IndexerSettings {
   /** List of words to exclude from indexing (e.g., place names, common words) */
   exceptions: string[];
-  
+
   /** Regex pattern to match Armenian names (as string for serialization) */
   pattern: string;
-  
+
   /** List of Armenian suffixes to remove from surnames (Unicode escaped strings) */
   suffixes: string[];
-  
+
   /** Minimum and maximum number of capitalized words to match */
   wordCount: {
     min: number;
@@ -30,10 +30,10 @@ export interface IndexerSettings {
 export interface ParsedName {
   /** First name */
   firstName: string;
-  
+
   /** Last name (surname) */
   lastName: string;
-  
+
   /** Full original name */
   fullName: string;
 }
@@ -44,13 +44,13 @@ export interface ParsedName {
 export interface NameMatch {
   /** Full matched text */
   text: string;
-  
+
   /** Word Range object */
   range: Word.Range;
-  
+
   /** Start position in the document text */
   startIndex: number;
-  
+
   /** Length of the match */
   length: number;
 }
@@ -61,10 +61,10 @@ export interface NameMatch {
 export interface IndexResult {
   /** Number of names successfully indexed */
   indexed: number;
-  
+
   /** Number of names skipped (due to exceptions or errors) */
   skipped: number;
-  
+
   /** Any errors encountered */
   errors: string[];
 }

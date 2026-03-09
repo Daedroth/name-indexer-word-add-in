@@ -13,6 +13,18 @@ import { indexArmenianNames } from "../utils/wordOps";
  * Triggered from the ribbon without opening the task pane.
  */
 export async function indexArmenianNamesCommand(event: Office.AddinCommands.Event) {
+  const safeComplete = () => {
+    try {
+      // In some edge cases (sideload/runtime issues), the event argument can be missing.
+      // Guard so we never throw here (otherwise Office will treat it as a timeout).
+      if (event && typeof event.completed === "function") {
+        event.completed();
+      }
+    } catch (error) {
+      console.error("Failed to call event.completed():", error instanceof Error ? error.message : String(error));
+    }
+  };
+
   try {
     await Word.run(async (context) => {
       // Load settings within the same context — avoids nested Word.run()
@@ -32,8 +44,8 @@ export async function indexArmenianNamesCommand(event: Office.AddinCommands.Even
     });
   } catch (error) {
     console.error("Error indexing names:", error instanceof Error ? error.message : String(error));
+  } finally {
+    // Always signal completion so Word unblocks the ribbon button
+    safeComplete();
   }
-
-  // Always signal completion so Word unblocks the ribbon button
-  event.completed();
 }

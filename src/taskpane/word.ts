@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-/* global document, Office, Word */
+/* global document, Office, Word, console, setInterval, setTimeout, HTMLElement, HTMLButtonElement, HTMLInputElement, HTMLTextAreaElement, Event, FileReader */
 
 import { IndexerSettings } from "../types";
 import { loadSettings, saveSettings, getDefaultSettings } from "../utils/settings";
@@ -15,31 +15,61 @@ let cancelToken = { cancelled: false };
 
 Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
-    document.getElementById("sideload-msg").style.display = "none";
-    document.getElementById("app-body").style.display = "flex";
+    // In some Office hosts, Office.onReady may fire before DOMContentLoaded.
+    // Attach handlers only after DOM is ready to avoid null elements.
+    const init = () => {
+      try {
+        (document.getElementById("sideload-msg") as HTMLElement).style.display = "none";
+        (document.getElementById("app-body") as HTMLElement).style.display = "flex";
 
-    // Apply Office theme on load
-    applyOfficeTheme(Office.context.officeTheme);
+        // Apply Office theme on load
+        applyOfficeTheme(Office.context.officeTheme);
 
-    // Poll for theme changes every 2 seconds (Office.js doesn't provide a reliable event)
-    setInterval(() => {
-      applyOfficeTheme(Office.context.officeTheme);
-    }, 2000);
+        // Poll for theme changes every 2 seconds (Office.js doesn't provide a reliable event)
+        setInterval(() => {
+          applyOfficeTheme(Office.context.officeTheme);
+        }, 2000);
 
-    document.getElementById("index-btn").onclick = handleIndexNames;
-    document.getElementById("preview-btn").onclick = handlePreviewNames;
-    document.getElementById("clear-btn").onclick = handleClearEntries;
-    document.getElementById("cancel-btn").onclick = handleCancel;
-    document.getElementById("save-btn").onclick = handleSaveSettings;
-    document.getElementById("load-btn").onclick = handleLoadSettings;
-    document.getElementById("reset-btn").onclick = handleResetSettings;
-    document.getElementById("exceptions-file").onchange = handleFileUpload;
+        (document.getElementById("index-btn") as HTMLButtonElement).addEventListener(
+          "click",
+          () => void handleIndexNames()
+        );
+        (document.getElementById("preview-btn") as HTMLButtonElement).addEventListener(
+          "click",
+          () => void handlePreviewNames()
+        );
+        (document.getElementById("clear-btn") as HTMLButtonElement).addEventListener(
+          "click",
+          () => void handleClearEntries()
+        );
+        (document.getElementById("cancel-btn") as HTMLButtonElement).addEventListener("click", handleCancel);
+        (document.getElementById("save-btn") as HTMLButtonElement).addEventListener(
+          "click",
+          () => void handleSaveSettings()
+        );
+        (document.getElementById("load-btn") as HTMLButtonElement).addEventListener(
+          "click",
+          () => void handleLoadSettings()
+        );
+        (document.getElementById("reset-btn") as HTMLButtonElement).addEventListener("click", handleResetSettings);
+        (document.getElementById("exceptions-file") as HTMLInputElement).addEventListener("change", handleFileUpload);
 
-    // Auto-regenerate the regex pattern whenever word count inputs change
-    document.getElementById("wordcount-min").oninput = regeneratePattern;
-    document.getElementById("wordcount-max").oninput = regeneratePattern;
+        // Auto-regenerate the regex pattern whenever word count inputs change
+        (document.getElementById("wordcount-min") as HTMLInputElement).addEventListener("input", regeneratePattern);
+        (document.getElementById("wordcount-max") as HTMLInputElement).addEventListener("input", regeneratePattern);
 
-    handleLoadSettings();
+        void handleLoadSettings();
+      } catch (error) {
+        console.error("Taskpane initialization error:", error);
+        showMessage("Initialization error: " + toErrorMessage(error), "error");
+      }
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
   }
 });
 
@@ -134,13 +164,6 @@ async function handleIndexNames() {
   const settings = getSettingsFromUI();
   if (!validatePattern(settings.pattern)) return;
 
-  const confirmed = confirm(
-    "This will insert XE index fields throughout the document.\n\n" +
-      "Tip: Save a copy of your document before proceeding — " +
-      "the operation cannot be easily undone in a single step.\n\nProceed?"
-  );
-  if (!confirmed) return;
-
   cancelToken = { cancelled: false };
 
   showProgress(true, true /* show cancel */);
@@ -164,10 +187,7 @@ async function handleIndexNames() {
       } else if (result.indexed === 0) {
         showMessage("No names were indexed. Check your pattern and exceptions list.", "warning");
       } else {
-        showMessage(
-          `Successfully indexed ${result.indexed} names (${result.skipped} skipped)`,
-          "success"
-        );
+        showMessage(`Successfully indexed ${result.indexed} names (${result.skipped} skipped)`, "success");
       }
     });
   } catch (error) {
@@ -210,11 +230,6 @@ async function handlePreviewNames() {
 }
 
 async function handleClearEntries() {
-  const confirmed = confirm(
-    "Are you sure you want to clear all index entries? This cannot be undone."
-  );
-  if (!confirmed) return;
-
   showProgress(true, false);
   hideResult();
   hidePreview();
@@ -276,14 +291,15 @@ function validatePattern(patternStr: string): boolean {
 function updateProgress(percent: number, status: string) {
   const bar = document.getElementById("progress-bar");
   const text = document.getElementById("status-text");
-  bar.style.width = percent + "%";
+  const clamped = Math.max(0, Math.min(100, Math.floor(percent)));
+  bar.style.width = clamped + "%";
+  bar.setAttribute("aria-valuenow", clamped.toString());
   text.textContent = status;
 }
 
 function showProgress(show: boolean, showCancel = false) {
   document.getElementById("progress-section").style.display = show ? "block" : "none";
-  document.getElementById("cancel-btn").style.display =
-    show && showCancel ? "inline-block" : "none";
+  document.getElementById("cancel-btn").style.display = show && showCancel ? "inline-block" : "none";
   if (show) updateProgress(0, "Starting…");
 }
 
@@ -335,19 +351,11 @@ function setButtonsEnabled(enabled: boolean) {
 }
 
 function getSettingsFromUI(): IndexerSettings {
-  const exceptionsText = (
-    document.getElementById("exceptions-textarea") as HTMLTextAreaElement
-  ).value;
+  const exceptionsText = (document.getElementById("exceptions-textarea") as HTMLTextAreaElement).value;
   const pattern = (document.getElementById("pattern-input") as HTMLInputElement).value;
   const suffixesText = (document.getElementById("suffixes-textarea") as HTMLTextAreaElement).value;
-  const wordCountMin = parseInt(
-    (document.getElementById("wordcount-min") as HTMLInputElement).value,
-    10
-  );
-  const wordCountMax = parseInt(
-    (document.getElementById("wordcount-max") as HTMLInputElement).value,
-    10
-  );
+  const wordCountMin = parseInt((document.getElementById("wordcount-min") as HTMLInputElement).value, 10);
+  const wordCountMax = parseInt((document.getElementById("wordcount-max") as HTMLInputElement).value, 10);
 
   const exceptions: string[] = [];
   if (exceptionsText.trim().length > 0) {
@@ -369,20 +377,16 @@ function getSettingsFromUI(): IndexerSettings {
     exceptions,
     pattern,
     suffixes,
-    wordCount: { min: wordCountMin, max: wordCountMax }
+    wordCount: { min: wordCountMin, max: wordCountMax },
   };
 }
 
 function populateUIFromSettings(settings: IndexerSettings) {
-  (document.getElementById("exceptions-textarea") as HTMLTextAreaElement).value =
-    settings.exceptions.join("\n");
+  (document.getElementById("exceptions-textarea") as HTMLTextAreaElement).value = settings.exceptions.join("\n");
   (document.getElementById("pattern-input") as HTMLInputElement).value = settings.pattern;
-  (document.getElementById("suffixes-textarea") as HTMLTextAreaElement).value =
-    settings.suffixes.join(", ");
-  (document.getElementById("wordcount-min") as HTMLInputElement).value =
-    settings.wordCount.min.toString();
-  (document.getElementById("wordcount-max") as HTMLInputElement).value =
-    settings.wordCount.max.toString();
+  (document.getElementById("suffixes-textarea") as HTMLTextAreaElement).value = settings.suffixes.join(", ");
+  (document.getElementById("wordcount-min") as HTMLInputElement).value = settings.wordCount.min.toString();
+  (document.getElementById("wordcount-max") as HTMLInputElement).value = settings.wordCount.max.toString();
 }
 
 function toErrorMessage(error: unknown): string {
