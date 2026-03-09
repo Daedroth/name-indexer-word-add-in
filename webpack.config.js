@@ -21,6 +21,7 @@ module.exports = async (env, options) => {
       polyfill: ["core-js/stable", "regenerator-runtime/runtime"],
       taskpane: "./src/taskpane/taskpane.ts",
       commands: "./src/commands/commands.ts",
+      progress: "./src/progress/progress.ts",
     },
     output: {
       clean: true,
@@ -112,6 +113,11 @@ module.exports = async (env, options) => {
         filename: "commands.html",
         template: "./src/commands/commands.html",
         chunks: ["polyfill", "commands"],
+      }),
+      new HtmlWebpackPlugin({
+        filename: "progress.html",
+        template: "./src/progress/progress.html",
+        chunks: ["polyfill", "progress"],
       }),
     ],
     devServer: {

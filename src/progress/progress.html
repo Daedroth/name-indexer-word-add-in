@@ -1,0 +1,47 @@
+<!-- Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License. -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Name Indexer</title>
+
+  <!-- Office JavaScript API -->
+  <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+</head>
+
+<body data-theme="light">
+  <header class="header">
+    <img class="header-icon" src="assets/icon-32.png" alt="" aria-hidden="true" />
+    <h1 class="title">Indexing names…</h1>
+  </header>
+
+  <main id="app-body" style="display: none;" aria-label="Indexing progress">
+    <section id="warning-section" aria-live="polite" style="display: none;">
+      <div id="warning-message" class="message warning"></div>
+    </section>
+
+    <section id="progress-section" aria-label="Operation progress">
+      <div class="progress-container">
+        <div id="progress-bar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0"
+          aria-valuemax="100"></div>
+      </div>
+      <div class="progress-footer">
+        <p id="status-text" class="status-text"></p>
+        <button id="cancel-btn" class="cancel-button">Cancel</button>
+      </div>
+    </section>
+
+    <section id="result-section" aria-live="polite" role="status" style="display: none;">
+      <div id="result-message" class="message"></div>
+      <div style="margin-top: 8px;">
+        <button id="close-btn" class="action-button secondary" style="display: none;">Close</button>
+      </div>
+    </section>
+  </main>
+</body>
+
+</html>
