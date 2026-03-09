@@ -131,6 +131,7 @@ export async function findArmenianNamesInDocument(
   // Performance comes from batching: queue many operations, then sync.
   // This limit caps how many paragraph.search() calls we queue before syncing.
   const maxQueuedSearchesPerSync = 60;
+  const paragraphChunkSize = 60;
 
   // --- Load all paragraph texts in a single sync ---
   const paragraphs = context.document.body.paragraphs;
@@ -149,6 +150,128 @@ export async function findArmenianNamesInDocument(
     index: number;
     length: number;
     occurrenceIndex: number;
+  };
+
+  type ScanResult = {
+    occurrences: ParagraphOccurrence[];
+    uniqueTexts: string[];
+  };
+
+  type ScanWorkerResponse =
+    | {
+        type: "scanResult";
+        requestId: string;
+        results: Array<{ id: number; occurrences: ParagraphOccurrence[]; uniqueTexts: string[] }>;
+      }
+    | { type: "error"; requestId: string; message: string };
+
+  const canUseWorker = typeof Worker !== "undefined";
+  const worker = canUseWorker ? new Worker(new URL("./nameScan.worker.ts", import.meta.url)) : null;
+  let nextRequestId = 0;
+
+  const terminateWorker = () => {
+    try {
+      worker?.terminate();
+    } catch {
+      // ignore
+    }
+  };
+
+  const scanChunkInWorker = (paragraphsToScan: Array<{ id: number; text: string }>): Promise<Map<number, ScanResult>> => {
+    if (!worker) {
+      return Promise.reject(new Error("Worker not available"));
+    }
+
+    const requestId = `${Date.now()}_${nextRequestId++}`;
+
+    return new Promise((resolve, reject) => {
+      const handler = (ev: MessageEvent) => {
+        const data = ev.data as ScanWorkerResponse;
+        if (!data || data.requestId !== requestId) return;
+
+        worker.removeEventListener("message", handler);
+
+        if (data.type === "error") {
+          reject(new Error(data.message));
+          return;
+        }
+
+        const map = new Map<number, ScanResult>();
+        for (const r of data.results) {
+          map.set(r.id, { occurrences: r.occurrences, uniqueTexts: r.uniqueTexts });
+        }
+
+        resolve(map);
+      };
+
+      worker.addEventListener("message", handler);
+
+      worker.postMessage({
+        type: "scan",
+        requestId,
+        patternSource: pattern.source,
+        patternFlags: pattern.flags,
+        paragraphs: paragraphsToScan,
+      });
+    });
+  };
+
+  const awaitWithCancellation = async <T>(promise: Promise<T>): Promise<T> => {
+    if (!cancelToken) return promise;
+
+    // Poll cancellation while we wait for the worker.
+    // (We could also use a MessageChannel-based cancel signal, but polling keeps this minimal.)
+    while (true) {
+      if (cancelToken.cancelled) {
+        terminateWorker();
+        throw new Error("Cancelled");
+      }
+
+      // Wait a short interval or until the promise resolves.
+      const outcome = await Promise.race([
+        promise.then((value) => ({ type: "resolved" as const, value })),
+        new Promise<{ type: "tick" }>((resolve) => setTimeout(() => resolve({ type: "tick" }), 50)),
+      ]);
+
+      if (outcome.type === "resolved") {
+        return outcome.value;
+      }
+    }
+  };
+
+  const scanChunkOnMainThread = (paragraphsToScan: Array<{ id: number; text: string }>): Map<number, ScanResult> => {
+    const map = new Map<number, ScanResult>();
+
+    for (const { id, text } of paragraphsToScan) {
+      // Reset regex state for each paragraph
+      pattern.lastIndex = 0;
+
+      const occurrencesSeen = new Map<string, number>();
+      const occurrences: ParagraphOccurrence[] = [];
+
+      let m: RegExpExecArray | null;
+      while ((m = pattern.exec(text)) !== null) {
+        const matchText = m[0];
+        const seenCount = occurrencesSeen.get(matchText) ?? 0;
+        occurrencesSeen.set(matchText, seenCount + 1);
+
+        occurrences.push({
+          text: matchText,
+          index: m.index,
+          length: matchText.length,
+          occurrenceIndex: seenCount,
+        });
+
+        // Guard against zero-length matches causing infinite loops
+        if (m[0].length === 0) {
+          pattern.lastIndex++;
+        }
+      }
+
+      map.set(id, { occurrences, uniqueTexts: Array.from(occurrencesSeen.keys()) });
+    }
+
+    return map;
   };
 
   type PendingParagraph = {
@@ -186,74 +309,87 @@ export async function findArmenianNamesInDocument(
     queuedSearchCount = 0;
   };
 
-  for (let i = 0; i < totalParagraphs; i++) {
-    if (cancelToken?.cancelled) break;
+  try {
+    for (let chunkStart = 0; chunkStart < totalParagraphs; chunkStart += paragraphChunkSize) {
+      if (cancelToken?.cancelled) break;
 
-    if (onProgress && totalParagraphs > 0 && i % 25 === 0) {
-      const percent = Math.floor(start + (i / totalParagraphs) * span);
-      onProgress(percent, `Searching… ${i + 1}/${totalParagraphs}`);
+      const chunkEndExclusive = Math.min(totalParagraphs, chunkStart + paragraphChunkSize);
+
+      if (onProgress && totalParagraphs > 0) {
+        const percent = Math.floor(start + (chunkStart / totalParagraphs) * span);
+        onProgress(percent, `Searching… ${chunkStart + 1}/${totalParagraphs}`);
+      }
+
+      // Collect texts for this chunk.
+      // Keep offsets on the main thread; worker only does CPU scanning.
+      const chunkTexts: Array<{ id: number; text: string; length: number }> = [];
+      for (let i = chunkStart; i < chunkEndExclusive; i++) {
+        const t = paragraphs.items[i].text;
+        chunkTexts.push({ id: i, text: t, length: t.length });
+      }
+
+      // Scan (worker preferred, fallback to main thread).
+      let scanMap: Map<number, ScanResult>;
+      try {
+        if (worker) {
+          scanMap = await awaitWithCancellation(
+            scanChunkInWorker(chunkTexts.map((p) => ({ id: p.id, text: p.text })))
+          );
+        } else {
+          scanMap = scanChunkOnMainThread(chunkTexts.map((p) => ({ id: p.id, text: p.text })));
+        }
+      } catch {
+        // If worker fails (blocked/older host), fall back to main-thread scanning.
+        scanMap = scanChunkOnMainThread(chunkTexts.map((p) => ({ id: p.id, text: p.text })));
+      }
+
+      for (let i = chunkStart; i < chunkEndExclusive; i++) {
+        if (cancelToken?.cancelled) break;
+
+        const paragraph = paragraphs.items[i];
+        const textLen = chunkTexts[i - chunkStart].length;
+        const scan = scanMap.get(i);
+
+        if (!scan || scan.occurrences.length === 0) {
+          globalOffset += textLen;
+          continue;
+        }
+
+        const searchResultsByText: Record<string, Word.RangeCollection> = Object.create(null) as Record<
+          string,
+          Word.RangeCollection
+        >;
+
+        for (const uniqueText of scan.uniqueTexts) {
+          const searchResults = paragraph.search(uniqueText, {
+            matchCase: true,
+            matchWholeWord: false,
+          });
+          searchResults.load("items");
+          searchResultsByText[uniqueText] = searchResults;
+          queuedSearchCount++;
+        }
+
+        pending.push({
+          globalOffset,
+          occurrences: scan.occurrences,
+          searchResultsByText,
+        });
+
+        if (queuedSearchCount >= maxQueuedSearchesPerSync) {
+          await flushPending();
+        }
+
+        globalOffset += textLen;
+      }
+
+      if (cancelToken?.cancelled) {
+        break;
+      }
     }
-
-    const paragraph = paragraphs.items[i];
-    const text = paragraph.text;
-
-    // Reset regex state for each paragraph
-    pattern.lastIndex = 0;
-
-    // Collect regex matches in this paragraph.
-    // Also track per-text occurrence indices so we can pick the correct
-    // search result range for repeated names in the same paragraph.
-    const occurrencesSeen = new Map<string, number>();
-    const occurrences: ParagraphOccurrence[] = [];
-
-    let m: RegExpExecArray | null;
-    while ((m = pattern.exec(text)) !== null) {
-      const matchText = m[0];
-      const seenCount = occurrencesSeen.get(matchText) ?? 0;
-      occurrencesSeen.set(matchText, seenCount + 1);
-
-      occurrences.push({
-        text: matchText,
-        index: m.index,
-        length: matchText.length,
-        occurrenceIndex: seenCount,
-      });
-    }
-
-    if (occurrences.length === 0) {
-      globalOffset += text.length;
-      continue;
-    }
-
-    // Dedupe searches per paragraph: call paragraph.search() once per unique matchText.
-    // (Previously we called it once per occurrence, which is extremely costly on big docs.)
-    const searchResultsByText: Record<string, Word.RangeCollection> = Object.create(null) as Record<
-      string,
-      Word.RangeCollection
-    >;
-    for (const uniqueText of occurrencesSeen.keys()) {
-      const searchResults = paragraph.search(uniqueText, {
-        matchCase: true,
-        matchWholeWord: false,
-      });
-      searchResults.load("items");
-      searchResultsByText[uniqueText] = searchResults;
-      queuedSearchCount++;
-    }
-
-    pending.push({
-      globalOffset,
-      occurrences,
-      searchResultsByText,
-    });
-
-    // Flush when we've queued enough searches to justify a round-trip.
-    // This reduces sync calls from "per paragraph" to "per batch".
-    if (queuedSearchCount >= maxQueuedSearchesPerSync) {
-      await flushPending();
-    }
-
-    globalOffset += text.length;
+  } finally {
+    // Always clean up the worker (important for long-lived task panes).
+    terminateWorker();
   }
 
   // Resolve any remaining queued searches.
