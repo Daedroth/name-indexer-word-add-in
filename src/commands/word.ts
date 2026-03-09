@@ -75,8 +75,11 @@ function trySendDialogMessage(dialog: Office.Dialog | null, message: ProgressDia
  * Triggered from the ribbon without opening the task pane.
  */
 export async function indexArmenianNamesCommand(event: Office.AddinCommands.Event) {
+  let isCompleted = false;
   const safeComplete = () => {
     try {
+      if (isCompleted) return;
+      isCompleted = true;
       // In some edge cases (sideload/runtime issues), the event argument can be missing.
       // Guard so we never throw here (otherwise Office will treat it as a timeout).
       if (event && typeof event.completed === "function") {
@@ -90,6 +93,10 @@ export async function indexArmenianNamesCommand(event: Office.AddinCommands.Even
   let dialog: Office.Dialog | null = null;
 
   try {
+    // Add-in Commands are time-limited and must call event.completed() quickly.
+    // We complete immediately, then continue the long-running indexing flow.
+    safeComplete();
+
     const cancelToken = { cancelled: false };
 
     // Dialog is best-effort. If it fails (popup blocked, older host), we still proceed.

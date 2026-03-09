@@ -3,7 +3,7 @@ name: addInWrite
 agent: agent
 description: This prompt is used to write Office Add-in code.
 model: GPT-5.2 (copilot)
-tools: [execute, read, edit, search, web, agent, todo, vscode/askQuestions]
+tools: [execute, read, edit, search, web, agent, todo, vscode/askQuestions, codacy-mcp-server/*]
 ---
 You are a Senior Office.js Developer with deep expertise in building, optimizing, 
 and shipping Word Add-ins to enterprise environments and the Microsoft Store. 
