@@ -63,6 +63,11 @@ async function indexMatches(
   onProgress?: ProgressCallback,
   cancelToken?: { cancelled: boolean }
 ): Promise<void> {
+  // Insert-field operations queue up on the JS side until a sync.
+  // Sync too often and you pay round-trip latency; sync too rarely and
+  // the pending command queue can grow very large on big documents.
+  const syncEvery = 25;
+
   for (let i = matches.length - 1; i >= 0; i--) {
     if (cancelToken?.cancelled) {
       if (onProgress) onProgress(100, `Cancelled — ${result.indexed} indexed so far`);
@@ -82,7 +87,7 @@ async function indexMatches(
       markIndexEntry(match.range, normalizedName);
       result.indexed++;
 
-      if (result.indexed % 5 === 0) {
+      if (result.indexed % syncEvery === 0) {
         // eslint-disable-next-line office-addins/no-context-sync-in-loop
         await context.sync();
 
@@ -122,13 +127,14 @@ export async function findArmenianNamesInDocument(
 ): Promise<NameMatch[]> {
   const matches: NameMatch[] = [];
 
-  // --- Batch 1: load all paragraph items ---
-  const paragraphs = context.document.body.paragraphs;
-  paragraphs.load("items");
-  await context.sync();
+  // In Office.js, true parallelism against the Word object model is not supported.
+  // Performance comes from batching: queue many operations, then sync.
+  // This limit caps how many paragraph.search() calls we queue before syncing.
+  const maxQueuedSearchesPerSync = 60;
 
-  // --- Batch 2: load all paragraph texts in a single sync ---
-  paragraphs.items.forEach((p) => p.load("text"));
+  // --- Load all paragraph texts in a single sync ---
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load("items/text");
   await context.sync();
 
   let globalOffset = 0;
@@ -137,6 +143,48 @@ export async function findArmenianNamesInDocument(
   const start = Math.max(0, Math.min(100, progressRange.start));
   const end = Math.max(0, Math.min(100, progressRange.end));
   const span = Math.max(0, end - start);
+
+  type ParagraphOccurrence = {
+    text: string;
+    index: number;
+    length: number;
+    occurrenceIndex: number;
+  };
+
+  type PendingParagraph = {
+    globalOffset: number;
+    occurrences: ParagraphOccurrence[];
+    searchResultsByText: Record<string, Word.RangeCollection>;
+  };
+
+  let pending: PendingParagraph[] = [];
+  let queuedSearchCount = 0;
+
+  const flushPending = async () => {
+    if (pending.length === 0) return;
+
+    // Resolve all queued paragraph.search() calls at once.
+    // eslint-disable-next-line office-addins/no-context-sync-in-loop
+    await context.sync();
+
+    for (const item of pending) {
+      for (const occ of item.occurrences) {
+        const results = item.searchResultsByText[occ.text];
+        const range = results?.items?.[occ.occurrenceIndex];
+        if (!range) continue;
+
+        matches.push({
+          text: occ.text,
+          range,
+          startIndex: item.globalOffset + occ.index,
+          length: occ.length,
+        });
+      }
+    }
+
+    pending = [];
+    queuedSearchCount = 0;
+  };
 
   for (let i = 0; i < totalParagraphs; i++) {
     if (cancelToken?.cancelled) break;
@@ -152,63 +200,65 @@ export async function findArmenianNamesInDocument(
     // Reset regex state for each paragraph
     pattern.lastIndex = 0;
 
-    // Collect all regex matches in this paragraph
-    const regexMatches: RegExpExecArray[] = [];
+    // Collect regex matches in this paragraph.
+    // Also track per-text occurrence indices so we can pick the correct
+    // search result range for repeated names in the same paragraph.
+    const occurrencesSeen = new Map<string, number>();
+    const occurrences: ParagraphOccurrence[] = [];
+
     let m: RegExpExecArray | null;
     while ((m = pattern.exec(text)) !== null) {
-      regexMatches.push(m);
+      const matchText = m[0];
+      const seenCount = occurrencesSeen.get(matchText) ?? 0;
+      occurrencesSeen.set(matchText, seenCount + 1);
+
+      occurrences.push({
+        text: matchText,
+        index: m.index,
+        length: matchText.length,
+        occurrenceIndex: seenCount,
+      });
     }
 
-    if (regexMatches.length === 0) {
+    if (occurrences.length === 0) {
       globalOffset += text.length;
       continue;
     }
 
-    // Track how many times each unique name text has appeared so far in this
-    // paragraph so we can pick the correct search-result by occurrence index.
-    const occurrencesSeen = new Map<string, number>();
-
-    // Queue all paragraph.search() calls before syncing (one sync per paragraph)
-    const searchResultRefs: Array<{
-      regexMatch: RegExpExecArray;
-      searchResults: Word.RangeCollection;
-      occurrenceIndex: number;
-    }> = [];
-
-    for (const regexMatch of regexMatches) {
-      const matchText = regexMatch[0];
-      const seenCount = occurrencesSeen.get(matchText) ?? 0;
-      occurrencesSeen.set(matchText, seenCount + 1);
-
-      const searchResults = paragraph.search(matchText, {
+    // Dedupe searches per paragraph: call paragraph.search() once per unique matchText.
+    // (Previously we called it once per occurrence, which is extremely costly on big docs.)
+    const searchResultsByText: Record<string, Word.RangeCollection> = Object.create(null) as Record<
+      string,
+      Word.RangeCollection
+    >;
+    for (const uniqueText of occurrencesSeen.keys()) {
+      const searchResults = paragraph.search(uniqueText, {
         matchCase: true,
         matchWholeWord: false,
       });
       searchResults.load("items");
-
-      searchResultRefs.push({
-        regexMatch,
-        searchResults,
-        occurrenceIndex: seenCount, // 0-based index of this occurrence in the paragraph
-      });
+      searchResultsByText[uniqueText] = searchResults;
+      queuedSearchCount++;
     }
 
-    // Single sync per paragraph resolves all searches at once
-    // eslint-disable-next-line office-addins/no-context-sync-in-loop
-    await context.sync();
+    pending.push({
+      globalOffset,
+      occurrences,
+      searchResultsByText,
+    });
 
-    for (const { regexMatch, searchResults, occurrenceIndex } of searchResultRefs) {
-      if (searchResults.items.length > occurrenceIndex) {
-        matches.push({
-          text: regexMatch[0],
-          range: searchResults.items[occurrenceIndex],
-          startIndex: globalOffset + regexMatch.index,
-          length: regexMatch[0].length,
-        });
-      }
+    // Flush when we've queued enough searches to justify a round-trip.
+    // This reduces sync calls from "per paragraph" to "per batch".
+    if (queuedSearchCount >= maxQueuedSearchesPerSync) {
+      await flushPending();
     }
 
     globalOffset += text.length;
+  }
+
+  // Resolve any remaining queued searches.
+  if (!cancelToken?.cancelled) {
+    await flushPending();
   }
 
   if (onProgress) {
