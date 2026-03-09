@@ -43,7 +43,12 @@ module.exports = async (env, options) => {
         {
           test: /\.html$/,
           exclude: /node_modules/,
-          use: "html-loader",
+          use: {
+            loader: "html-loader",
+            options: {
+              sources: false,
+            },
+          },
         },
         {
           test: /\.css$/,
@@ -90,6 +95,15 @@ module.exports = async (env, options) => {
               } else {
                 return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
               }
+            },
+          },
+          {
+            // A sideload-friendly manifest that points to your hosted HTTPS assets.
+            // Users can install this without trusting localhost dev certificates.
+            from: "manifest.xml",
+            to: "manifest.sideload.xml",
+            transform(content) {
+              return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
             },
           },
         ],

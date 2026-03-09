@@ -8,7 +8,7 @@
   <Version>1.0.0.0</Version>
   <ProviderName>CatOnPillow Studio</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Armenian Names Indexer"/>
+  <DisplayName DefaultValue="Armenian Name Indexer"/>
   <Description DefaultValue="Automatically index Armenian names in your Word document."/>
   <IconUrl DefaultValue="https://localhost:3000/assets/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-80.png"/>
@@ -100,8 +100,8 @@
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Armenian Names Indexer"/>
-        <bt:String id="CommandsGroup.Label" DefaultValue="Armenian Names Indexer"/>
+        <bt:String id="GetStarted.Title" DefaultValue="Armenian Name Indexer"/>
+        <bt:String id="CommandsGroup.Label" DefaultValue="Armenian Name Indexer"/>
         <bt:String id="TaskpaneButton.Label" DefaultValue="Settings"/>
         <bt:String id="ActionButton.Label" DefaultValue="Index Names"/>
       </bt:ShortStrings>

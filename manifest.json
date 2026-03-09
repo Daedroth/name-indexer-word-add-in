@@ -14,7 +14,7 @@
         "termsOfUseUrl": "https://www.catonpillow.com/servicesagreement"
     },
     "name": {
-        "short": "NameIndexer",
+        "short": "ArmenianIndexer",
         "full": "Armenian Name Indexer for Word"
     },
     "description": {
@@ -27,6 +27,9 @@
     },
     "accentColor": "#230201",
     "validDomains": [
+        "localhost",
+        "127.0.0.1",
+        "daedroth.github.io",
         "catonpillow.com"
     ],
     "authorization": {
@@ -87,9 +90,9 @@
                     "lifetime": "short",
                     "actions": [
                         {
-                            "id": "action",
+                            "id": "indexArmenianNamesCommand",
                             "type": "executeFunction",
-                            "displayName": "action"
+                            "displayName": "Index Names"
                         }
                     ]
                 }
@@ -167,7 +170,7 @@
                                                 "title": "Index Armenian Names",
                                                 "description": "Automatically index all Armenian names in the document using saved settings."
                                             },
-                                            "actionId": "action"
+                                            "actionId": "indexArmenianNamesCommand"
                                         }
                                     ]
                                 }
